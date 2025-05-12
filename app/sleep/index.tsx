@@ -1,17 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, useWindowDimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  Platform,
+  useWindowDimensions,
+  Alert,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Moon, Sun, Play, Pause, X, ChartLine as LineChart, Clock, CircleAlert as AlertCircle, ArrowLeft, Timer, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Volume2 } from 'lucide-react-native';
+import {
+  Moon,
+  Sun,
+  Play,
+  Pause,
+  X,
+  ChartLine as LineChart,
+  Clock,
+  CircleAlert as AlertCircle,
+  ArrowLeft,
+  Timer,
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  Volume2,
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { format, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, differenceInMinutes, addMinutes } from 'date-fns';
-import { useSleepContext } from '@/contexts/SleepContext';
+import {
+  format,
+  addDays,
+  subDays,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameDay,
+  differenceInMinutes,
+  addMinutes,
+} from 'date-fns';
+import { supabase } from '../../utils/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 type SleepSession = {
+  id?: string;
+  type: 'nap' | 'night';
+  start_time: Date;
+  end_time?: Date;
+  duration?: number;
+  user_id?: string;
+};
+
+type DatabaseSleepSession = {
   id: string;
   type: 'nap' | 'night';
-  startTime: Date;
-  endTime?: Date;
+  start_time: string;
+  end_time?: string;
   duration?: number;
+  user_id?: string;
 };
 
 type ElapsedTime = {
@@ -30,105 +76,232 @@ type DailySleepStats = {
 export default function SleepScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const DAY_WIDTH = (SCREEN_WIDTH - 40) / 7;
-  
+  const { user } = useAuth();
+
   const router = useRouter();
   const [showSleepOptions, setShowSleepOptions] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
-  const [currentSession, setCurrentSession] = useState<SleepSession | null>(null);
-  const [elapsedTime, setElapsedTime] = useState<ElapsedTime>({ hours: 0, minutes: 0, seconds: 0 });
+  const [currentSession, setCurrentSession] = useState<SleepSession | null>(
+    null
+  );
+  const [elapsedTime, setElapsedTime] = useState<ElapsedTime>({
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [sessions, setSessions] = useState<SleepSession[]>([
-    {
-      id: '1',
-      type: 'night',
-      startTime: new Date(2024, 1, 15, 20, 0),
-      endTime: new Date(2024, 1, 16, 6, 30),
-      duration: 630,
-    },
-    {
-      id: '2',
-      type: 'nap',
-      startTime: new Date(2024, 1, 16, 10, 0),
-      endTime: new Date(2024, 1, 16, 11, 30),
-      duration: 90,
-    },
-    {
-      id: '3',
-      type: 'nap',
-      startTime: new Date(2024, 1, 16, 14, 0),
-      endTime: new Date(2024, 1, 16, 15, 30),
-      duration: 90,
-    },
-  ]);
+  const [sessions, setSessions] = useState<SleepSession[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Load sleep sessions
+  const loadSleepSessions = async () => {
+    try {
+      setIsLoading(true);
+      if (!user) return;
+
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const { data, error } = await supabase
+        .from('sleep_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('start_time', startOfDay.toISOString())
+        .lte('start_time', endOfDay.toISOString())
+        .order('start_time', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedSessions = (data as DatabaseSleepSession[]).map(
+        (session) => ({
+          ...session,
+          start_time: new Date(session.start_time),
+          end_time: session.end_time ? new Date(session.end_time) : undefined,
+        })
+      );
+
+      setSessions(formattedSessions);
+    } catch (error) {
+      console.error('Error loading sleep sessions:', error);
+      Alert.alert('Error', 'Failed to load sleep sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load sessions when date changes
+  useEffect(() => {
+    loadSleepSessions();
+  }, [selectedDate, user]);
+
+  // Timer effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isTracking && currentSession) {
       interval = setInterval(() => {
         const now = new Date();
-        const diffInSeconds = Math.floor((now.getTime() - currentSession.startTime.getTime()) / 1000);
-        
+        const startTime = new Date(currentSession.start_time);
+
+        // Ensure we're working with valid dates
+        if (isNaN(startTime.getTime()) || isNaN(now.getTime())) {
+          console.error('Invalid date detected in timer');
+          return;
+        }
+
+        const diffInSeconds = Math.floor(
+          (now.getTime() - startTime.getTime()) / 1000
+        );
+
         const hours = Math.floor(diffInSeconds / 3600);
         const minutes = Math.floor((diffInSeconds % 3600) / 60);
         const seconds = diffInSeconds % 60;
-        
+
         setElapsedTime({ hours, minutes, seconds });
       }, 1000);
     }
     return () => clearInterval(interval);
   }, [isTracking, currentSession]);
 
-  const startTracking = (type: 'nap' | 'night') => {
-    const newSession: SleepSession = {
-      id: Date.now().toString(),
-      type,
-      startTime: new Date(),
-    };
-    setCurrentSession(newSession);
-    setIsTracking(true);
-    setShowSleepOptions(false);
-    setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+  const startTracking = async (type: 'nap' | 'night') => {
+    try {
+      if (!user) {
+        Alert.alert('Error', 'Please login to track sleep sessions');
+        return;
+      }
+
+      const newSession: SleepSession = {
+        type,
+        start_time: new Date(),
+        user_id: user.id,
+      };
+
+      const { data, error } = await supabase
+        .from('sleep_sessions')
+        .insert([
+          {
+            type: newSession.type,
+            start_time: newSession.start_time.toISOString(),
+            user_id: newSession.user_id,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setCurrentSession({
+        ...data,
+        start_time: new Date(data.start_time),
+        end_time: data.end_time ? new Date(data.end_time) : undefined,
+      });
+      setIsTracking(true);
+      setShowSleepOptions(false);
+      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+    } catch (error) {
+      console.error('Error starting sleep session:', error);
+      Alert.alert('Error', 'Failed to start sleep session');
+    }
   };
 
-  const stopTracking = () => {
-    if (currentSession) {
-      const endTime = new Date();
-      const durationInMinutes = Math.floor(
-        (endTime.getTime() - currentSession.startTime.getTime()) / (1000 * 60)
+  const stopTracking = async () => {
+    try {
+      if (!currentSession || !user) return;
+
+      const end_time = new Date();
+      const start_time = new Date(currentSession.start_time);
+
+      // Ensure we're working with valid dates
+      if (isNaN(start_time.getTime()) || isNaN(end_time.getTime())) {
+        Alert.alert(
+          'Invalid Time',
+          'Unable to calculate sleep duration. Please try again.'
+        );
+        return;
+      }
+
+      // Calculate duration in minutes
+      const durationInMinutes = Math.max(
+        0,
+        Math.floor((end_time.getTime() - start_time.getTime()) / (1000 * 60))
       );
+
+      // Validate duration
+      if (durationInMinutes > 1440) {
+        // 24 hours in minutes
+        Alert.alert(
+          'Invalid Duration',
+          'Sleep duration cannot exceed 24 hours. Please check your device time settings.'
+        );
+        return;
+      }
+
+      console.log('Updating session with:', {
+        id: currentSession.id,
+        end_time: end_time.toISOString(),
+        duration: durationInMinutes,
+      });
+
+      const { error } = await supabase
+        .from('sleep_sessions')
+        .update({
+          end_time: end_time.toISOString(),
+          duration: durationInMinutes,
+        })
+        .eq('id', currentSession.id);
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
       const completedSession: SleepSession = {
         ...currentSession,
-        endTime,
+        end_time,
         duration: durationInMinutes,
       };
-      setSessions(prev => [completedSession, ...prev]);
+
+      setSessions((prev) => [completedSession, ...prev]);
       setCurrentSession(null);
       setIsTracking(false);
       setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+    } catch (error) {
+      console.error('Error stopping sleep session:', error);
+      Alert.alert('Error', 'Failed to stop sleep session. Please try again.');
     }
   };
 
   const formatTime = (time: ElapsedTime) => {
     const { hours, minutes, seconds } = time;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    return `${hours.toString().padStart(2, '0')}:${minutes
+      .toString()
+      .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    return `${hours.toString().padStart(2, '0')}:${mins
+      .toString()
+      .padStart(2, '0')}`;
   };
 
   const calculateDailyStats = (date: Date): DailySleepStats => {
-    const daysSessions = sessions.filter(session => 
-      session.endTime && isSameDay(session.startTime, date)
+    const daysSessions = sessions.filter(
+      (session) => session.end_time && isSameDay(session.start_time, date)
     );
 
-    const totalSleep = daysSessions.reduce((acc, session) => acc + (session.duration || 0), 0);
+    const totalSleep = daysSessions.reduce(
+      (acc, session) => acc + (session.duration || 0),
+      0
+    );
     const nightSleep = daysSessions
-      .filter(session => session.type === 'night')
+      .filter((session) => session.type === 'night')
       .reduce((acc, session) => acc + (session.duration || 0), 0);
-    const naps = daysSessions.filter(session => session.type === 'nap').length;
+    const naps = daysSessions.filter(
+      (session) => session.type === 'nap'
+    ).length;
 
     let quality: DailySleepStats['quality'] = 'poor';
     if (totalSleep >= 840) quality = 'excellent'; // 14+ hours
@@ -149,17 +322,21 @@ export default function SleepScreen() {
   });
 
   const navigateWeek = (direction: 'prev' | 'next') => {
-    setSelectedDate(current => 
+    setSelectedDate((current) =>
       direction === 'prev' ? subDays(current, 7) : addDays(current, 7)
     );
   };
 
   const getQualityColor = (quality: DailySleepStats['quality']) => {
     switch (quality) {
-      case 'excellent': return '#10B981';
-      case 'good': return '#3B82F6';
-      case 'fair': return '#F59E0B';
-      case 'poor': return '#EF4444';
+      case 'excellent':
+        return '#10B981';
+      case 'good':
+        return '#3B82F6';
+      case 'fair':
+        return '#F59E0B';
+      case 'poor':
+        return '#EF4444';
     }
   };
 
@@ -172,13 +349,12 @@ export default function SleepScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#7C3AED', '#6D28D9']}
-        style={styles.header}>
+      <LinearGradient colors={['#7C3AED', '#6D28D9']} style={styles.header}>
         <View style={styles.headerContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}>
+            onPress={() => router.back()}
+          >
             <ArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Sleep Tracking</Text>
@@ -187,7 +363,8 @@ export default function SleepScreen() {
         <View style={styles.tabsContainer}>
           <TouchableOpacity
             style={[styles.tab, true && styles.activeTab]}
-            onPress={() => {}}>
+            onPress={() => {}}
+          >
             <Moon size={20} color={true ? '#7C3AED' : '#FFFFFF'} />
             <Text style={[styles.tabText, true && styles.activeTabText]}>
               Sleep
@@ -195,7 +372,8 @@ export default function SleepScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, false && styles.activeTab]}
-            onPress={() => router.push('/sleep/white-noise')}>
+            onPress={() => router.push('/sleep/white-noise')}
+          >
             <Volume2 size={20} color={false ? '#7C3AED' : '#FFFFFF'} />
             <Text style={[styles.tabText, false && styles.activeTabText]}>
               White Noise
@@ -205,17 +383,18 @@ export default function SleepScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.content}>
-        {isTracking && (
+        {isTracking && currentSession && (
           <View style={styles.timerCard}>
             <View style={styles.timerHeader}>
               <Timer size={24} color="#7C3AED" />
               <Text style={styles.timerTitle}>
-                {currentSession?.type === 'nap' ? 'Nap' : 'Night Sleep'} in Progress
+                {currentSession.type === 'nap' ? 'Nap' : 'Night Sleep'} in
+                Progress
               </Text>
             </View>
             <Text style={styles.timerDisplay}>{formatTime(elapsedTime)}</Text>
             <Text style={styles.timerSubtext}>
-              Started at {format(currentSession?.startTime || new Date(), 'hh:mm a')}
+              Started at {format(currentSession.start_time, 'hh:mm a')}
             </Text>
           </View>
         )}
@@ -226,30 +405,33 @@ export default function SleepScreen() {
               <ChevronLeft size={24} color="#6B7280" />
             </TouchableOpacity>
             <Text style={styles.calendarTitle}>
-              {format(weekDays[0], 'MMM d')} - {format(weekDays[6], 'MMM d, yyyy')}
+              {format(weekDays[0], 'MMM d')} -{' '}
+              {format(weekDays[6], 'MMM d, yyyy')}
             </Text>
             <TouchableOpacity onPress={() => navigateWeek('next')}>
               <ChevronRight size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
           <View style={styles.weekContainer}>
-            {weekDays.map(day => {
+            {weekDays.map((day, index) => {
               const stats = calculateDailyStats(day);
               return (
-                <TouchableOpacity 
-                  key={day.toISOString()}
+                <TouchableOpacity
+                  key={index}
                   style={[
                     dayColumnStyle,
                     isSameDay(day, selectedDate) && styles.selectedDay,
                   ]}
-                  onPress={() => setSelectedDate(day)}>
+                  onPress={() => setSelectedDate(day)}
+                >
                   <Text style={styles.dayName}>{format(day, 'EEE')}</Text>
                   <Text style={styles.dayNumber}>{format(day, 'd')}</Text>
-                  <View 
+                  <View
                     style={[
                       styles.sleepIndicator,
                       { backgroundColor: getQualityColor(stats.quality) },
-                    ]}>
+                    ]}
+                  >
                     <Text style={styles.sleepHours}>
                       {Math.floor(stats.totalSleep / 60)}h
                     </Text>
@@ -292,12 +474,14 @@ export default function SleepScreen() {
                     <View style={styles.summaryItem}>
                       <LineChart size={20} color="#10B981" />
                       <Text style={styles.summaryLabel}>Quality</Text>
-                      <Text 
+                      <Text
                         style={[
                           styles.summaryValue,
                           { color: getQualityColor(stats.quality) },
-                        ]}>
-                        {stats.quality.charAt(0).toUpperCase() + stats.quality.slice(1)}
+                        ]}
+                      >
+                        {stats.quality.charAt(0).toUpperCase() +
+                          stats.quality.slice(1)}
                       </Text>
                     </View>
                   </View>
@@ -309,15 +493,21 @@ export default function SleepScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sleep Sessions</Text>
-          {sessions
-            .filter(session => isSameDay(session.startTime, selectedDate))
-            .map(session => (
-              <View key={session.id} style={styles.sleepSession}>
+          {isLoading ? (
+            <Text style={styles.loadingText}>Loading sessions...</Text>
+          ) : sessions.length === 0 ? (
+            <Text style={styles.emptyText}>
+              No sleep sessions recorded for this day
+            </Text>
+          ) : (
+            sessions.map((session, index) => (
+              <View key={index} style={styles.sleepSession}>
                 <View style={styles.sessionTime}>
                   <Clock size={16} color="#6B7280" />
                   <Text style={styles.sessionTimeText}>
-                    {format(session.startTime, 'hh:mm a')}
-                    {session.endTime && ` - ${format(session.endTime, 'hh:mm a')}`}
+                    {format(session.start_time, 'hh:mm a')}
+                    {session.end_time &&
+                      ` - ${format(session.end_time, 'hh:mm a')}`}
                   </Text>
                 </View>
                 <View style={styles.sessionDetails}>
@@ -331,21 +521,21 @@ export default function SleepScreen() {
                   )}
                 </View>
               </View>
-            ))}
+            ))
+          )}
         </View>
       </ScrollView>
 
       {!isTracking ? (
         <TouchableOpacity
           style={styles.startButton}
-          onPress={() => setShowSleepOptions(true)}>
+          onPress={() => setShowSleepOptions(true)}
+        >
           <Play size={24} color="#FFFFFF" />
           <Text style={styles.startButtonText}>Start Sleep Session</Text>
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity
-          style={styles.stopButton}
-          onPress={stopTracking}>
+        <TouchableOpacity style={styles.stopButton} onPress={stopTracking}>
           <Pause size={24} color="#FFFFFF" />
           <Text style={styles.stopButtonText}>Stop Tracking</Text>
         </TouchableOpacity>
@@ -355,7 +545,8 @@ export default function SleepScreen() {
         visible={showSleepOptions}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowSleepOptions(false)}>
+        onRequestClose={() => setShowSleepOptions(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
@@ -366,7 +557,8 @@ export default function SleepScreen() {
             </View>
             <TouchableOpacity
               style={styles.sleepOption}
-              onPress={() => startTracking('nap')}>
+              onPress={() => startTracking('nap')}
+            >
               <Sun size={24} color="#7C3AED" />
               <View style={styles.sleepOptionContent}>
                 <Text style={styles.sleepOptionTitle}>Start Nap</Text>
@@ -377,7 +569,8 @@ export default function SleepScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.sleepOption}
-              onPress={() => startTracking('night')}>
+              onPress={() => startTracking('night')}
+            >
               <Moon size={24} color="#7C3AED" />
               <View style={styles.sleepOptionContent}>
                 <Text style={styles.sleepOptionTitle}>Start Night Sleep</Text>
@@ -681,5 +874,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
     marginTop: 2,
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 16,
   },
 });
