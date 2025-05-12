@@ -7,11 +7,11 @@ import { format, addHours, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay,
 import { supabase } from '../utils/supabase';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '../contexts/AuthContext';
+import { useFeedingContext } from '../contexts/FeedingContext';
 
 type FeedingSession = {
-  // id: string;
   type: 'breast' | 'bottle' | 'solid';
-  start_Time: Date;
+  startTime: Date;
   end_time?: Date;
   duration?: number;
   amount?: number;
@@ -46,11 +46,9 @@ type DateRange = 'day' | 'week' | 'month';
 export default function FeedingScreen() {
   const router = useRouter();
   const {user} = useAuth();
+  const { currentSession, showTimer, elapsedTime, startBreastfeeding, stopBreastfeeding, setShowTimer } = useFeedingContext();
   const [activeTab, setActiveTab] = useState<'breast' | 'bottle' | 'solid'>('breast');
   const [showNewSession, setShowNewSession] = useState(false);
-  const [showTimer, setShowTimer] = useState(false);
-  const [currentSession, setCurrentSession] = useState<FeedingSession | null>(null);
-  const [elapsedTime, setElapsedTime] = useState<ElapsedTime>({ hours: 0, minutes: 0, seconds: 0 });
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dateRange, setDateRange] = useState<DateRange>('day');
   const [amount, setAmount] = useState('');
@@ -59,24 +57,6 @@ export default function FeedingScreen() {
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [feedingSessions, setFeedingSessions] = useState<FeedingSession[]>([]);
-
-  // Timer effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (showTimer && currentSession) {
-      interval = setInterval(() => {
-        const now = new Date();
-        const diffInSeconds = Math.floor((now.getTime() - currentSession.start_Time.getTime()) / 1000);
-        
-        const hours = Math.floor(diffInSeconds / 3600);
-        const minutes = Math.floor((diffInSeconds % 3600) / 60);
-        const seconds = diffInSeconds % 60;
-        
-        setElapsedTime({ hours, minutes, seconds });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [showTimer, currentSession]);
 
   // Load feeding sessions effect
   useEffect(() => {
@@ -95,21 +75,38 @@ export default function FeedingScreen() {
         .eq('user_id', user.id)
         .order('start_time', { ascending: false });
 
-      const startOfDay = new Date(selectedDate);
+      // Convert selected date to local timezone
+      const localDate = new Date(selectedDate);
+      const startOfDay = new Date(localDate);
       startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(selectedDate);
+      const endOfDay = new Date(localDate);
       endOfDay.setHours(23, 59, 59, 999);
+
+      // Convert to UTC for database query
+      const startOfDayUTC = new Date(startOfDay.getTime() - startOfDay.getTimezoneOffset() * 60000);
+      const endOfDayUTC = new Date(endOfDay.getTime() - endOfDay.getTimezoneOffset() * 60000);
+
+      console.log('Filtering dates:', {
+        localTime: localDate.toLocaleString(),
+        startOfDayLocal: startOfDay.toLocaleString(),
+        endOfDayLocal: endOfDay.toLocaleString(),
+        startOfDayUTC: startOfDayUTC.toISOString(),
+        endOfDayUTC: endOfDayUTC.toISOString()
+      });
 
       if (dateRange === 'day') {
         query = query
-          .gte('start_time', startOfDay.toISOString())
-          .lte('start_time', endOfDay.toISOString());
+          .gte('start_time', startOfDayUTC.toISOString())
+          .lte('start_time', endOfDayUTC.toISOString());
       } else if (dateRange === 'week') {
-        const weekStart = startOfWeek(selectedDate);
-        const weekEnd = endOfWeek(selectedDate);
+        const weekStart = startOfWeek(localDate);
+        const weekEnd = endOfWeek(localDate);
+        const weekStartUTC = new Date(weekStart.getTime() - weekStart.getTimezoneOffset() * 60000);
+        const weekEndUTC = new Date(weekEnd.getTime() - weekEnd.getTimezoneOffset() * 60000);
+        
         query = query
-          .gte('start_time', weekStart.toISOString())
-          .lte('start_time', weekEnd.toISOString());
+          .gte('start_time', weekStartUTC.toISOString())
+          .lte('start_time', weekEndUTC.toISOString());
       }
 
       const { data, error } = await query;
@@ -124,12 +121,22 @@ export default function FeedingScreen() {
         return;
       }
 
-      const formattedSessions = (data as DatabaseFeedingSession[]).map(session => ({
-        ...session,
-        start_Time: new Date(session.start_time),
-        end_time: session.end_time ? new Date(session.end_time) : undefined,
-        foodType: session.food_type,
-      }));
+      console.log('Raw data from Supabase:', data);
+
+      const formattedSessions = (data as DatabaseFeedingSession[]).map(session => {
+        // Convert UTC times from database to local time
+        const startTime = new Date(session.start_time);
+        const endTime = session.end_time ? new Date(session.end_time) : undefined;
+        
+        return {
+          ...session,
+          startTime,
+          end_time: endTime,
+          foodType: session.food_type,
+        };
+      });
+
+      console.log('Formatted sessions:', formattedSessions);
 
       setFeedingSessions(formattedSessions);
     } catch (error) {
@@ -151,11 +158,22 @@ export default function FeedingScreen() {
         Alert.alert('Error', 'Please login to save feeding sessions');
         return;
       }
+      const startTimeUTC = new Date(session.startTime.getTime() - session.startTime.getTimezoneOffset() * 60000);
+      const endTimeUTC = session.end_time 
+        ? new Date(session.end_time.getTime() - session.end_time.getTimezoneOffset() * 60000)
+        : undefined;
+
+      console.log('Saving session:', {
+        originalStartTime: session.startTime.toLocaleString(),
+        originalEndTime: session.end_time?.toLocaleString(),
+        startTimeUTC: startTimeUTC.toISOString(),
+        endTimeUTC: endTimeUTC?.toISOString()
+      });
 
       const dbSession: DatabaseFeedingSession = {
         type: session.type,
-        start_time: session.start_Time.toISOString(),
-        end_time: session.end_time?.toISOString(),
+        start_time: startTimeUTC.toISOString(),
+        end_time: endTimeUTC?.toISOString(),
         duration: session.duration,
         amount: session.amount,
         unit: session.unit,
@@ -175,7 +193,7 @@ export default function FeedingScreen() {
 
       const formattedSession: FeedingSession = {
         ...data,
-        start_Time: new Date(data.start_time),
+        startTime: new Date(data.start_time),
         end_time: data.end_time ? new Date(data.end_time) : undefined,
         foodType: data.food_type,
       };
@@ -189,14 +207,12 @@ export default function FeedingScreen() {
 
   const handleStartBreastfeeding = async (side: 'left' | 'right') => {
     try {
-      const newSession: FeedingSession = {
-        // id: crypto.randomUUID(),
-        type: 'breast',
-        start_Time: new Date(),
-        side,
-      };
-      setCurrentSession(newSession);
-      setShowTimer(true);
+      const startTime = new Date();
+      console.log('Starting breastfeeding session:', {
+        startTime: startTime.toLocaleString(),
+        side
+      });
+      startBreastfeeding(side);
       setShowNewSession(false);
     } catch (error) {
       console.error('Error starting breastfeeding session:', error);
@@ -205,12 +221,13 @@ export default function FeedingScreen() {
   };
 
   const handleStopBreastfeeding = async () => {
+    console.log('currentSession', currentSession);
     try {
       if (!currentSession) return;
 
       const end_time = new Date();
       const durationInMinutes = Math.floor(
-        (end_time.getTime() - currentSession.start_Time.getTime()) / (1000 * 60)
+        (end_time.getTime() - currentSession.startTime.getTime()) / (1000 * 60)
       );
       
       const completedSession: FeedingSession = {
@@ -219,10 +236,14 @@ export default function FeedingScreen() {
         duration: durationInMinutes,
       };
 
+      console.log('Stopping breastfeeding session:', {
+        startTime: completedSession.startTime.toLocaleString(),
+        endTime: end_time.toLocaleString(),
+        duration: durationInMinutes
+      });
+
       await saveFeedingSession(completedSession);
-      setCurrentSession(null);
-      setShowTimer(false);
-      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+      stopBreastfeeding();
     } catch (error) {
       console.error('Error stopping breastfeeding session:', error);
       Alert.alert('Error', 'Failed to stop breastfeeding session');
@@ -248,7 +269,7 @@ export default function FeedingScreen() {
   const handleBottleFeeding = async () => {
     const newSession: FeedingSession = {
       type: 'bottle',
-      start_Time: new Date(),
+      startTime: new Date(),
       end_time: new Date(),
       amount: Number(amount),
       unit,
@@ -263,7 +284,7 @@ export default function FeedingScreen() {
     const newSession: FeedingSession = {
       user_id: user?.id,
       type: 'solid',
-      start_Time: new Date(),
+      startTime: new Date(),
       end_time: new Date(),
       foodType,
       notes,
@@ -273,7 +294,7 @@ export default function FeedingScreen() {
     resetForm();
   };
 
-  const formatTime = (time: ElapsedTime) => {
+  const formatTime = (time: { hours: number; minutes: number; seconds: number }) => {
     const { hours, minutes, seconds } = time;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
@@ -316,7 +337,7 @@ export default function FeedingScreen() {
 
   const getFilteredSessions = () => {
     return feedingSessions.filter(session => 
-      isSameDay(session.start_Time, selectedDate)
+      isSameDay(session.startTime, selectedDate)
     );
   };
 
@@ -397,7 +418,7 @@ export default function FeedingScreen() {
             </View>
             <Text style={styles.timerDisplay}>{formatTime(elapsedTime)}</Text>
             <Text style={styles.timerSubtext}>
-              Started at {format(currentSession.start_Time, 'hh:mm a')}
+              Started at {format(currentSession.startTime, 'hh:mm a')}
             </Text>
             <TouchableOpacity
               style={styles.switchSideButton}
@@ -414,12 +435,13 @@ export default function FeedingScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Today's Feedings</Text>
-          {getFilteredSessions().map(session => (
-            <View key={session.id} style={styles.feedingItem}>
+          {getFilteredSessions().map((session, index) => (
+            console.log('session', session),
+            <View key={index} style={styles.feedingItem}>
               <View style={styles.feedingTime}>
                 <Clock size={16} color="#6B7280" />
                 <Text style={styles.feedingTimeText}>
-                  {format(session.start_Time, 'hh:mm a')}
+                  {format(session.startTime, 'hh:mm a')}
                 </Text>
               </View>
               <View style={styles.feedingDetails}>

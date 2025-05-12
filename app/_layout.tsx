@@ -13,6 +13,7 @@ import { HealthLogProvider } from '@/contexts/HealthLogContext';
 import { ReminderProvider } from '@/contexts/ReminderContext';
 import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
 import { View, ActivityIndicator } from 'react-native';
+import { FeedingProvider } from '@/contexts/FeedingContext';
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -35,6 +36,7 @@ export default function RootLayout() {
     <AuthProvider>
       <ActivityLogProvider>
         <QuickActionsProvider>
+          <FeedingProvider>
           <SleepProvider>
             <DiaperProvider>
               <VaccinationProvider>
@@ -58,6 +60,7 @@ export default function RootLayout() {
               </VaccinationProvider>
             </DiaperProvider>
           </SleepProvider>
+          </FeedingProvider>
         </QuickActionsProvider>
       </ActivityLogProvider>
     </AuthProvider>
