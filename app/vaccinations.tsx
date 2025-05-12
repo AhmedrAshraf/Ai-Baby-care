@@ -86,13 +86,13 @@ export default function VaccinationsScreen() {
     
     switch (dateRange) {
       case 'day':
-        return <Text>{format(selectedDate, 'MMMM d, yyyy')}</Text>;
+        return format(selectedDate, 'MMMM d, yyyy');
       case 'week':
-        return <Text>{`${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`}</Text>;
+        return `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
       case 'month':
-        return <Text>{format(selectedDate, 'MMMM yyyy')}</Text>;
+        return format(selectedDate, 'MMMM yyyy');
       default:
-        return <Text></Text>;
+        return '';
     }
   };
 
