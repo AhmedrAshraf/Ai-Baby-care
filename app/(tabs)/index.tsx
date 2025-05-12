@@ -85,7 +85,7 @@ export default function TodayScreen() {
           <View style={styles.babyInfo}>
             <View style={styles.babyProfile}>
               <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=800' }}
+                source={{ uri: user?.user_metadata.baby_photo_url || 'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=800' }}
                 style={styles.babyImage}
               />
               <TouchableOpacity style={styles.editPhotoButton}>

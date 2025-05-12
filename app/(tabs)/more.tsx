@@ -70,7 +70,6 @@ const MENU_ITEMS = [
 export default function MoreScreen() {
   const router = useRouter();
   const { signOut, user } = useAuth();
-  console.log("🚀 ~ MoreScreen ~ user:", user)
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -184,9 +183,9 @@ export default function MoreScreen() {
           style={styles.profile}
           onPress={() => setShowProfileModal(true)}>
           <View style={styles.avatarContainer}>
-            {profileImage ? (
+            {profileImage || user?.user_metadata.baby_photo_url ? (
               <Image
-                source={{ uri: profileImage }}
+                source={{ uri: profileImage || user?.user_metadata.baby_photo_url }}
                 style={styles.avatar}
               />
             ) : (
@@ -205,13 +204,13 @@ export default function MoreScreen() {
             <Text style={styles.email}>{user?.email || 'sarah.j@example.com'}</Text>
             <View style={styles.editProfileButton}>
               <Edit2 size={12} color="#FFFFFF" />
-              <Text style={styles.editProfileText}>Edit Profile</Text>
+              <Text style={styles.editProfileText}>Edits Profile</Text>
             </View>
           </View>
         </TouchableOpacity>
       </LinearGradient>
 
-      <ScrollView style={styles.content}>
+      <ScrollView style={styles.content}>i
         <View style={styles.menuSection}>
           {MENU_ITEMS.map((item, index) => (
             <TouchableOpacity
@@ -408,9 +407,9 @@ export default function MoreScreen() {
                 <TouchableOpacity 
                   style={styles.profileImageEdit}
                   onPress={handlePickImage}>
-                  {profileImage ? (
+                  {profileImage || user?.user_metadata.baby_photo_url ? (
                     <Image
-                      source={{ uri: profileImage }}
+                      source={{ uri: profileImage || user?.user_metadata.baby_photo_url }}
                       style={styles.profileImageLarge}
                     />
                   ) : (
@@ -428,7 +427,7 @@ export default function MoreScreen() {
                   <Text style={styles.inputLabel}>Name</Text>
                   <TextInput
                     style={styles.input}
-                    value={user?.user_metadata?.name || ''}
+                    value={user?.user_metadata?.parent_name || ''}
                     placeholder="Enter your name"
                   />
                 </View>

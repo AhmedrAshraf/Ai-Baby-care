@@ -7,6 +7,9 @@ import { Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/utils/supabase';
 
+const CLOUDINARY_CLOUD_NAME = 'do0qfrr5y';
+const CLOUDINARY_UPLOAD_PRESET = 'desist';
+
 const isValidEmail = (email: string) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
@@ -127,7 +130,6 @@ export default function RegisterScreen() {
 
     return true;
   };
-
   const handlePickImage = async () => {
     try {
       if (Platform.OS === 'web') {
@@ -148,15 +150,27 @@ export default function RegisterScreen() {
         input.click();
       } else {
         // Native implementation
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          setError('Permission to access media library was denied');
+          return;
+        }
+
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.images,
           allowsEditing: true,
           aspect: [1, 1],
           quality: 0.8,
+          base64: true,
         });
 
         if (!result.canceled) {
+          // Store both URI and base64 data
           setBabyPhoto(result.assets[0].uri);
+          // Store base64 data in a separate state if needed
+          if (result.assets[0].base64) {
+            console.log('Base64 data available');
+          }
         }
       }
     } catch (error) {
@@ -168,55 +182,68 @@ export default function RegisterScreen() {
   const uploadBabyPhoto = async (userId: string): Promise<string | null> => {
     try {
       if (!babyPhoto) return null;
-      console.log('Attempting to upload baby psshoto');
+      console.log('Attempting to upload baby photo to Cloudinary');
 
-      const photoName = `${userId}-${Date.now()}.jpg`;
-      const photoPath = `baby-photos/${photoName}`;
+      // Create form data for Cloudinary upload
+      const formData = new FormData();
+      formData.append('file', {
+        uri: babyPhoto,
+        type: 'image/jpeg',
+        name: `${userId}-${Date.now()}.jpg`,
+      } as any);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      formData.append('cloud_name', CLOUDINARY_CLOUD_NAME);
 
-      console.log("🚀 ~ uploadBabyPhoto ~ photoPath:", photoPath)
-      let photoBlob: Blob;
-      if (Platform.OS === 'web' && babyPhoto.startsWith('data:')) {
-        // Convert base64 to blob for web
-        const response = await fetch(babyPhoto);
-        console.log("🚀 ~ uploadBabyPhoto ~ response:", response)
-        photoBlob = await response.blob();
-      } else {
-        // For native, first check if the file exists and is accessible
+      // Add retry logic for upload
+      let retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
         try {
-          const response = await fetch(babyPhoto);
-          console.log("🚀 ~ uploadBabyPhoto ~ response:", response)
-          if (!response.ok) throw new Error('Failed to fetch image');
-          photoBlob = await response.blob();
+          console.log(`Attempting Cloudinary upload (attempt ${retryCount + 1})...`);
+
+          const response = await fetch(
+            `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+            {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'multipart/form-data',
+              },
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Cloudinary upload error:', errorData);
+            throw new Error(`Upload failed: ${errorData.error?.message || response.statusText}`);
+          }
+
+          const data = await response.json();
+          console.log('Upload successful:', data);
+
+          // Return the secure URL of the uploaded image
+          return data.secure_url;
         } catch (error) {
-          console.error('Error accessing photo:', error);
-          throw new Error('Unable to access the selected photo');
+          console.error(`Error uploading to Cloudinary (attempt ${retryCount + 1}):`, error);
+          retryCount++;
+          
+          if (retryCount === maxRetries) {
+            throw new Error(`Failed to upload photo after ${maxRetries} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+          
+          // Wait before retrying with exponential backoff
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.log(`Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
 
-      // Verify blob was created successfully
-      if (!photoBlob || photoBlob.size === 0) {
-        throw new Error('Invalid photo data');
-      }
-console.log('caas');
-
-      // const { data, error } = await supabase.storage
-      //   .from('profiles')
-      //   .upload(photoPath, photoBlob, {
-      //     contentType: 'image/jpeg',
-      //     upsert: true,
-      //   });
-      //   console.log("🚀 ~ uploadBabyPhoto ~ data:", data)
-
-      // if (error) throw error;
-
-      // const { data: { publicUrl } } = supabase.storage
-      //   .from('profiles')
-      //   .getPublicUrl(photoPath);
-
-      // return publicUrl;
+      throw new Error('Failed to upload photo after multiple attempts');
     } catch (error) {
       console.error('Error uploading photo:', error);
-      throw new Error('Failed to upload photo');
+      throw new Error(`Failed to upload photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -232,10 +259,30 @@ console.log('caas');
 
       const finalRelationship = relationshipToChild === 'other' ? customRelationship : relationshipToChild;
       
+      // Upload baby photo first if selected
+      let photoUrl = null;
+      if (babyPhoto) {
+        try {
+          // Generate temporary ID for photo upload
+          const tempId = `temp-${Date.now()}`;
+          photoUrl = await uploadBabyPhoto(tempId);
+          if (!photoUrl) {
+            throw new Error('Failed to upload photo: No URL returned from Cloudinary');
+          }
+          console.log('Photo uploaded successfully:', photoUrl);
+        } catch (photoError) {
+          console.error('Photo upload failed:', photoError);
+          setError('Failed to upload photo. Please try again.');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Validate and format data according to schema constraints
       const profileData = {
         parent_name: parentName.trim() || '',
         baby_name: babyName.trim() || '',
+        baby_photo_url: photoUrl || '',
         baby_birthday: new Date(babyBirthday.trim()).toISOString() || '',
         baby_gender: babyGender as 'boy' | 'girl' || '',
         relationship_to_child: finalRelationship || '',
@@ -246,7 +293,7 @@ console.log('caas');
       console.log('Attempting to sign up with data:', {
         email: email.trim(),
         ...profileData,
-        hasPhoto: !!babyPhoto
+        hasPhoto: !!photoUrl
       });
 
       // Add retry logic for signup
@@ -273,7 +320,7 @@ console.log('caas');
             retryCount++;
             if (retryCount < maxRetries) {
               console.log(`Retrying signup (attempt ${retryCount + 1})...`);
-              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
               continue;
             }
             throw signUpError;
@@ -313,37 +360,6 @@ console.log('caas');
             } catch (error) {
               if (profileRetryCount === maxRetries - 1) throw error;
               profileRetryCount++;
-            }
-          }
-
-          // Upload baby photo if selected
-          if (babyPhoto) {
-            console.log('Attempting to upload baby photo');
-            try {
-              const photoUrl = await uploadBabyPhoto(data.user.id);
-              console.log("🚀 ~ handleRegister ~ photoUrl:", photoUrl)
-              if (photoUrl) {
-                console.log('Photo uploaded successfully:', photoUrl);
-                // Update user profile with photo URL
-                const { error: updateError } = await supabase
-                  .from('user_profiles')
-                  .update({ 
-                    baby_photo_url: photoUrl,
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('user_id', data.user.id);
-
-                if (updateError) {
-                  console.error('Error updating profile with photo:', updateError);
-                } else {
-                  console.log('Profile updated with photo URL successfully');
-                }
-              } else {
-                console.error('Failed to upload photo');
-              }
-            } catch (photoError) {
-              console.error('Photo upload failed:', photoError);
-              // Continue with registration even if photo upload fails
             }
           }
 
