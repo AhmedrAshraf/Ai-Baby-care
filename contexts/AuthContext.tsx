@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { Session, User, WeakPassword } from '@supabase/supabase-js';
 import { supabase } from '@/utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
@@ -9,7 +9,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   signUp: (email: string, password: string, metadata?: { [key: string]: any }) => Promise<{ data: any; error: any }>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ user: User; session: Session; weakPassword?: WeakPassword }>;
   signOut: () => Promise<void>;
 };
 
@@ -21,10 +21,11 @@ function useProtectedRoute(user: User | null) {
 
   useEffect(() => {
     const inAuthGroup = segments[0] === '(auth)';
-    
     if (!user && !inAuthGroup) {
-      router.replace('/login');
+      console.log('Redirecting to /(auth)');
+      router.replace('/(auth)/login');
     } else if (user && inAuthGroup) {
+      console.log('Redirecting to /(tabs)');
       router.replace('/(tabs)');
     }
   }, [user, segments]);
@@ -151,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
-      router.replace('/login');
+      router.replace('/(auth)/login');
     } catch (error) {
       console.error('Error during sign out:', error);
       throw error;

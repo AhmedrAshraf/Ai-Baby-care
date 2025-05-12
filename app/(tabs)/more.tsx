@@ -70,6 +70,7 @@ const MENU_ITEMS = [
 export default function MoreScreen() {
   const router = useRouter();
   const { signOut, user } = useAuth();
+  console.log("🚀 ~ MoreScreen ~ user:", user)
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -200,7 +201,7 @@ export default function MoreScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.name}>{user?.user_metadata?.name || 'Sarah Johnson'}</Text>
+            <Text style={styles.name}>{user?.user_metadata?.parent_name || 'Sarah Johnson'}</Text>
             <Text style={styles.email}>{user?.email || 'sarah.j@example.com'}</Text>
             <View style={styles.editProfileButton}>
               <Edit2 size={12} color="#FFFFFF" />

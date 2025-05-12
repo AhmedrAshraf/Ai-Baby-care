@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/utils/supabase';
-import { checkNetworkConnectivity } from '@/utils/supabase';
+// import { checkNetworkConnectivity } from '@/utils/supabase';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -24,10 +24,10 @@ export default function ForgotPasswordScreen() {
       setLoading(true);
 
       // Check network connectivity
-      const isConnected = await checkNetworkConnectivity();
-      if (!isConnected) {
-        throw new Error('No internet connection. Please check your network and try again.');
-      }
+      // const isConnected = await checkNetworkConnectivity();
+      // if (!isConnected) {
+      //   throw new Error('No internet connection. Please check your network and try again.');
+      // }
 
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: `${window.location.origin}/reset-password`,

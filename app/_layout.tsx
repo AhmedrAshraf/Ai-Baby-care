@@ -44,9 +44,10 @@ export default function RootLayout() {
                       <Stack screenOptions={{ headerShown: false }}>
                         <Stack.Screen name="index" />
                         <Stack.Screen name="login" />
-                        <Stack.Screen name="register" />
+                        {/* <Stack.Screen name="register" /> */}
                         <Stack.Screen name="verify" />
-                        <Stack.Screen name="forgot-password" />
+                        {/* <Stack.Screen name="forgot-password" /> */}
+                        <Stack.Screen name="(auth)" />
                         <Stack.Screen name="(tabs)" />
                         <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
                       </Stack>

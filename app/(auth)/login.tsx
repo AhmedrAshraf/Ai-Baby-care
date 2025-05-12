@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator 
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { checkNetworkConnectivity } from '@/utils/supabase';
+// import { checkNetworkConnectivity } from '@/utils/supabase';
 
 const isValidEmail = (email: string) => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -46,11 +46,11 @@ export default function LoginScreen() {
       setError('');
       setLoading(true);
 
-      const isConnected = await checkNetworkConnectivity();
-      if (!isConnected) {
-        setError('Unable to connect to the server. Please check your internet connection.');
-        return;
-      }
+        // const isConnected = await checkNetworkConnectivity();
+        // if (!isConnected) {
+        //   setError('Unable to connect to the server. Please check your internet connection.');
+        //   return;
+        // }
 
       await signIn(email.trim(), password);
       router.replace('/(tabs)');
@@ -75,7 +75,9 @@ export default function LoginScreen() {
   };
 
   const handleSignUp = () => {
-    clearForm();
+    // clearForm();
+    console.log('Navigating to /register');
+    setError('');
     router.push('/register');
   };
 
@@ -163,7 +165,8 @@ export default function LoginScreen() {
             <Text style={styles.footerText}>Don't have an account? </Text>
             <TouchableOpacity 
               style={styles.signUpButton}
-              onPress={handleSignUp}>
+              onPress={handleSignUp}
+              >
               <Text style={styles.signUpText}>Sign Up</Text>
             </TouchableOpacity>
           </View>

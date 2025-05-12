@@ -3,7 +3,6 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityInd
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { checkNetworkConnectivity } from '@/utils/supabase';
 import { Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/utils/supabase';
@@ -17,15 +16,15 @@ type RelationshipType = 'mother' | 'father' | 'guardian' | 'other';
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [parentName, setParentName] = useState('');
-  const [babyName, setBabyName] = useState('');
-  const [babyBirthday, setBabyBirthday] = useState('');
-  const [babyGender, setBabyGender] = useState<'boy' | 'girl' | ''>('');
+  const [email, setEmail] = useState('ahmed@gmail.com');
+  const [password, setPassword] = useState('123456');
+  const [confirmPassword, setConfirmPassword] = useState('123456');
+  const [parentName, setParentName] = useState('Ahmed');
+  const [babyName, setBabyName] = useState('John');
+  const [babyBirthday, setBabyBirthday] = useState('2020-01-01');
+  const [babyGender, setBabyGender] = useState<'boy' | 'girl' | ''>('boy');
   const [relationshipToChild, setRelationshipToChild] = useState<RelationshipType>('guardian');
-  const [customRelationship, setCustomRelationship] = useState('');
+  const [customRelationship, setCustomRelationship] = useState('Guardian');
   const [babyPhoto, setBabyPhoto] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
@@ -33,26 +32,58 @@ export default function RegisterScreen() {
   const { signUp } = useAuth();
 
   const validateForm = () => {
-    if (!email.trim() || !password.trim() || !confirmPassword.trim() || 
-        !parentName.trim() || !babyName.trim() || !babyBirthday.trim() ||
-        !babyGender || !relationshipToChild || 
-        (relationshipToChild === 'other' && !customRelationship.trim())) {
-      setError('Please fill in all fields');
+    console.log('Validating form');
+    // Check each field individually and provide specific error messages
+    if (!email.trim()) {
+      setError('Email is required');
+      console.log('Email is required');
       return false;
     }
 
     if (!isValidEmail(email.trim())) {
       setError('Please enter a valid email address');
+      console.log('Please enter a valid email address');
+      return false;
+    }
+
+    if (!password.trim()) {
+      setError('Password is required');
+      console.log('Password is required');
       return false;
     }
 
     if (password.length < 6) {
       setError('Password must be at least 6 characters long');
+      console.log('Password must be at least 6 characters long');
+      return false;
+    }
+
+    if (!confirmPassword.trim()) {
+      setError('Please confirm your password');
+      console.log('Please confirm your password');
       return false;
     }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
+      console.log('Passwords do not match');
+      return false;
+    }
+
+    if (!parentName || !parentName.trim()) {
+      setError('Your name is required');
+      console.log('Your name is required');
+      return false;
+    }
+
+    if (!babyName.trim()) {
+      setError('Baby\'s name is required');
+      console.log('Baby\'s name is required');
+      return false;
+    }
+
+    if (!babyBirthday.trim()) {
+      setError('Baby\'s birthday is required');
       return false;
     }
 
@@ -60,11 +91,37 @@ export default function RegisterScreen() {
     const birthdayRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!birthdayRegex.test(babyBirthday)) {
       setError('Please enter baby\'s birthday in YYYY-MM-DD format');
+      console.log('Invalid birthday format');
+      return false;
+    }
+
+    if (!babyGender) {
+      setError('Please select baby\'s gender');
+      console.log('Please select baby\'s gender');
+      return false;
+    }
+
+    if (!relationshipToChild) {
+      setError('Please select your relationship to the child');
+      console.log('Please select your relationship to the child');
+      return false;
+    }
+
+    if (relationshipToChild === 'other' && !customRelationship.trim()) {
+      setError('Please specify your relationship to the child');
+      console.log('Please specify your relationship to the child');
       return false;
     }
 
     if (relationshipToChild === 'other' && customRelationship.length > 50) {
       setError('Custom relationship must be 50 characters or less');
+      console.log('Custom relationship must be 50 characters or less');
+      return false;
+    }
+
+    if (!babyPhoto) {
+      setError('Please select a baby photo');
+      console.log('Please select a baby photo');
       return false;
     }
 
@@ -92,7 +149,7 @@ export default function RegisterScreen() {
       } else {
         // Native implementation
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ImagePicker.MediaTypeOptions.images,
           allowsEditing: true,
           aspect: [1, 1],
           quality: 0.8,
@@ -109,45 +166,63 @@ export default function RegisterScreen() {
   };
 
   const uploadBabyPhoto = async (userId: string): Promise<string | null> => {
-    if (!babyPhoto) return null;
-
     try {
+      if (!babyPhoto) return null;
+      console.log('Attempting to upload baby psshoto');
+
       const photoName = `${userId}-${Date.now()}.jpg`;
       const photoPath = `baby-photos/${photoName}`;
 
+      console.log("🚀 ~ uploadBabyPhoto ~ photoPath:", photoPath)
       let photoBlob: Blob;
       if (Platform.OS === 'web' && babyPhoto.startsWith('data:')) {
         // Convert base64 to blob for web
         const response = await fetch(babyPhoto);
+        console.log("🚀 ~ uploadBabyPhoto ~ response:", response)
         photoBlob = await response.blob();
       } else {
-        // Convert uri to blob for native
-        const response = await fetch(babyPhoto);
-        photoBlob = await response.blob();
+        // For native, first check if the file exists and is accessible
+        try {
+          const response = await fetch(babyPhoto);
+          console.log("🚀 ~ uploadBabyPhoto ~ response:", response)
+          if (!response.ok) throw new Error('Failed to fetch image');
+          photoBlob = await response.blob();
+        } catch (error) {
+          console.error('Error accessing photo:', error);
+          throw new Error('Unable to access the selected photo');
+        }
       }
 
-      const { data, error } = await supabase.storage
-        .from('profiles')
-        .upload(photoPath, photoBlob, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
+      // Verify blob was created successfully
+      if (!photoBlob || photoBlob.size === 0) {
+        throw new Error('Invalid photo data');
+      }
+console.log('caas');
 
-      if (error) throw error;
+      // const { data, error } = await supabase.storage
+      //   .from('profiles')
+      //   .upload(photoPath, photoBlob, {
+      //     contentType: 'image/jpeg',
+      //     upsert: true,
+      //   });
+      //   console.log("🚀 ~ uploadBabyPhoto ~ data:", data)
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('profiles')
-        .getPublicUrl(photoPath);
+      // if (error) throw error;
 
-      return publicUrl;
+      // const { data: { publicUrl } } = supabase.storage
+      //   .from('profiles')
+      //   .getPublicUrl(photoPath);
+
+      // return publicUrl;
     } catch (error) {
       console.error('Error uploading photo:', error);
-      return null;
+      throw new Error('Failed to upload photo');
     }
   };
 
   const handleRegister = async () => {
     if (!validateForm()) {
+      console.log('Form validation failed');
       return;
     }
 
@@ -155,57 +230,146 @@ export default function RegisterScreen() {
       setError('');
       setLoading(true);
 
-      // Check network connectivity
-      const isConnected = await checkNetworkConnectivity();
-      if (!isConnected) {
-        throw new Error('No internet connection. Please check your network and try again.');
-      }
-
       const finalRelationship = relationshipToChild === 'other' ? customRelationship : relationshipToChild;
-
-      const { data, error: signUpError } = await signUp(email.trim(), password, {
-        metadata: {
-          parent_name: parentName,
-          baby_name: babyName,
-          baby_birthday: babyBirthday,
-          baby_gender: babyGender,
-          relationship_to_child: finalRelationship,
-        }
-      });
       
-      if (signUpError) {
-        if (signUpError.message === 'User already registered' || 
-            signUpError.message?.includes('already registered') ||
-            signUpError.message?.includes('already exists') ||
-            signUpError.code === 'user_already_exists' ||
-            signUpError.code === '422') {
-          setError('An account with this email already exists. Please sign in instead.');
+      // Validate and format data according to schema constraints
+      const profileData = {
+        parent_name: parentName.trim() || '',
+        baby_name: babyName.trim() || '',
+        baby_birthday: new Date(babyBirthday.trim()).toISOString() || '',
+        baby_gender: babyGender as 'boy' | 'girl' || '',
+        relationship_to_child: finalRelationship || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('Attempting to sign up with data:', {
+        email: email.trim(),
+        ...profileData,
+        hasPhoto: !!babyPhoto
+      });
+
+      // Add retry logic for signup
+      let retryCount = 0;
+      const maxRetries = 3;
+      let lastError = null;
+
+      while (retryCount < maxRetries) {
+        try {
+          // Sign up with metadata
+          const { data, error: signUpError } = await signUp(email.trim(), password, profileData);
+          
+          if (signUpError) {
+            console.error(`Sign up error (attempt ${retryCount + 1}):`, signUpError);
+            if (signUpError.message === 'User already registered' || 
+                signUpError.message?.includes('already registered') ||
+                signUpError.message?.includes('already exists') ||
+                signUpError.code === 'user_already_exists' ||
+                signUpError.code === '422') {
+              setError('An account with this email already exists. Please sign in instead.');
+              return;
+            }
+            lastError = signUpError;
+            retryCount++;
+            if (retryCount < maxRetries) {
+              console.log(`Retrying signup (attempt ${retryCount + 1})...`);
+              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Exponential backoff
+              continue;
+            }
+            throw signUpError;
+          }
+
+          if (!data?.user?.id) {
+            throw new Error('Failed to create user account');
+          }
+
+          console.log('User created successfully:', data.user.id);
+
+          // Create user profile record with retry
+          let profileRetryCount = 0;
+          while (profileRetryCount < maxRetries) {
+            try {
+              const { error: profileError } = await supabase
+                .from('user_profiles')
+                .insert({
+                  user_id: data.user.id,
+                  ...profileData
+                });
+
+              if (profileError) {
+                console.error(`Profile creation error (attempt ${profileRetryCount + 1}):`, profileError);
+                lastError = profileError;
+                profileRetryCount++;
+                if (profileRetryCount < maxRetries) {
+                  console.log(`Retrying profile creation (attempt ${profileRetryCount + 1})...`);
+                  await new Promise(resolve => setTimeout(resolve, 1000 * profileRetryCount));
+                  continue;
+                }
+                throw profileError;
+              }
+
+              console.log('User profile created successfully');
+              break;
+            } catch (error) {
+              if (profileRetryCount === maxRetries - 1) throw error;
+              profileRetryCount++;
+            }
+          }
+
+          // Upload baby photo if selected
+          if (babyPhoto) {
+            console.log('Attempting to upload baby photo');
+            try {
+              const photoUrl = await uploadBabyPhoto(data.user.id);
+              console.log("🚀 ~ handleRegister ~ photoUrl:", photoUrl)
+              if (photoUrl) {
+                console.log('Photo uploaded successfully:', photoUrl);
+                // Update user profile with photo URL
+                const { error: updateError } = await supabase
+                  .from('user_profiles')
+                  .update({ 
+                    baby_photo_url: photoUrl,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('user_id', data.user.id);
+
+                if (updateError) {
+                  console.error('Error updating profile with photo:', updateError);
+                } else {
+                  console.log('Profile updated with photo URL successfully');
+                }
+              } else {
+                console.error('Failed to upload photo');
+              }
+            } catch (photoError) {
+              console.error('Photo upload failed:', photoError);
+              // Continue with registration even if photo upload fails
+            }
+          }
+
+          // Navigate directly to tabs
+          router.replace('/(tabs)');
           return;
-        }
-        throw signUpError;
-      }
-
-      // Upload baby photo if selected
-      if (data?.user && babyPhoto) {
-        const photoUrl = await uploadBabyPhoto(data.user.id);
-        if (photoUrl) {
-          // Update user profile with photo URL
-          const { error: updateError } = await supabase
-            .from('user_profiles')
-            .update({ baby_photo_url: photoUrl })
-            .eq('user_id', data.user.id);
-
-          if (updateError) {
-            console.error('Error updating profile with photo:', updateError);
+        } catch (error) {
+          lastError = error;
+          retryCount++;
+          if (retryCount < maxRetries) {
+            console.log(`Retrying signup (attempt ${retryCount + 1})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
           }
         }
       }
 
-      // Navigate directly to tabs instead of verification
-      router.replace('/(tabs)');
+      // If we get here, all retries failed
+      throw lastError || new Error('Failed to create account after multiple attempts');
     } catch (error: any) {
       console.error('Registration error:', error);
-      setError(error.message || 'Failed to create account');
+      if (error.message?.includes('Network request failed') || 
+          error.message?.includes('Unable to connect')) {
+        setError('Network connection issue. Please check your internet connection and try again.');
+      } else {
+        setError(error.message || 'Failed to create account');
+      }
     } finally {
       setLoading(false);
     }

@@ -34,16 +34,16 @@ export default function TodayScreen() {
   useEffect(() => {
     if (user?.user_metadata) {
       setUserProfile({
-        parent_name: user.user_metadata.parent_name,
-        baby_name: user.user_metadata.baby_name,
-        baby_birthday: user.user_metadata.baby_birthday,
-        baby_gender: user.user_metadata.baby_gender,
+        parent_name: user?.user_metadata?.parent_name || '',
+        baby_name: user?.user_metadata?.baby_name || '',
+        baby_birthday: user?.user_metadata?.baby_birthday || '',
+        baby_gender: user?.user_metadata?.baby_gender || '',
       });
     }
   }, [user]);
 
   const getGreeting = () => {
-    const hour = currentTime.getHours();
+    const hour = currentTime?.getHours();
     if (hour < 12) return 'Good Morning';
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
@@ -71,17 +71,17 @@ export default function TodayScreen() {
 
   const getBabyAge = () => {
     if (!userProfile?.baby_birthday) return '';
-    return formatDistanceToNow(new Date(userProfile.baby_birthday), { addSuffix: false });
+    return formatDistanceToNow(new Date(userProfile.baby_birthday || ''), { addSuffix: false });
   };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <LinearGradient
+       <LinearGradient
         colors={['#7C3AED', '#6D28D9']}
         style={styles.header}>
         <View style={styles.headerContent}>
           <Text style={styles.greeting}>{getGreeting()},</Text>
-          <Text style={styles.name}>{userProfile?.parent_name || user?.email?.split('@')[0] || 'Parent'}</Text>
+          <Text style={styles.name}>{userProfile?.parent_name || user?.email?.split('@')?.[0] || 'Parent'}</Text>
           <View style={styles.babyInfo}>
             <View style={styles.babyProfile}>
               <Image
@@ -261,7 +261,7 @@ export default function TodayScreen() {
           </View>
         </ScrollView>
       </View>
-
+      
       <Modal
         visible={showSaveDialog}
         transparent
