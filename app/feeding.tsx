@@ -1,20 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Utensils, Clock, X, Plus, Baby, ArrowLeft, ArrowRight, Timer, Droplet, Apple, Bell, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { format, addHours, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addDays, subDays } from 'date-fns';
+import { supabase } from '../utils/supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { useAuth } from '../contexts/AuthContext';
 
 type FeedingSession = {
-  id: string;
+  // id: string;
   type: 'breast' | 'bottle' | 'solid';
-  startTime: Date;
+  start_Time: Date;
+  end_time?: Date;
   duration?: number;
   amount?: number;
   unit?: 'ml' | 'oz';
   side?: 'left' | 'right' | 'both';
   foodType?: string;
   notes?: string;
+  user_id?: string;
+};
+
+type DatabaseFeedingSession = {
+  type: 'breast' | 'bottle' | 'solid';
+  start_time: string;
+  end_time?: string;
+  duration?: number;
+  amount?: number;
+  unit?: 'ml' | 'oz';
+  side?: 'left' | 'right' | 'both';
+  food_type?: string;
+  notes?: string;
+  user_id?: string;
 };
 
 type ElapsedTime = {
@@ -27,6 +45,7 @@ type DateRange = 'day' | 'week' | 'month';
 
 export default function FeedingScreen() {
   const router = useRouter();
+  const {user} = useAuth();
   const [activeTab, setActiveTab] = useState<'breast' | 'bottle' | 'solid'>('breast');
   const [showNewSession, setShowNewSession] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
@@ -38,30 +57,16 @@ export default function FeedingScreen() {
   const [unit, setUnit] = useState<'ml' | 'oz'>('ml');
   const [foodType, setFoodType] = useState('');
   const [notes, setNotes] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [feedingSessions, setFeedingSessions] = useState<FeedingSession[]>([]);
 
-  const [feedingSessions, setFeedingSessions] = useState<FeedingSession[]>([
-    {
-      id: '1',
-      type: 'breast',
-      startTime: new Date(),
-      duration: 15,
-      side: 'left',
-    },
-    {
-      id: '2',
-      type: 'bottle',
-      startTime: new Date(Date.now() - 3600000),
-      amount: 120,
-      unit: 'ml',
-    },
-  ]);
-
+  // Timer effect
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (showTimer && currentSession) {
       interval = setInterval(() => {
         const now = new Date();
-        const diffInSeconds = Math.floor((now.getTime() - currentSession.startTime.getTime()) / 1000);
+        const diffInSeconds = Math.floor((now.getTime() - currentSession.start_Time.getTime()) / 1000);
         
         const hours = Math.floor(diffInSeconds / 3600);
         const minutes = Math.floor((diffInSeconds % 3600) / 60);
@@ -73,58 +78,197 @@ export default function FeedingScreen() {
     return () => clearInterval(interval);
   }, [showTimer, currentSession]);
 
-  const handleStartBreastfeeding = (side: 'left' | 'right') => {
-    const newSession: FeedingSession = {
-      id: Date.now().toString(),
-      type: 'breast',
-      startTime: new Date(),
-      side,
-    };
-    setCurrentSession(newSession);
-    setShowTimer(true);
-    setShowNewSession(false);
-  };
+  // Load feeding sessions effect
+  useEffect(() => {
+    loadFeedingSessions();
+  }, [selectedDate, dateRange]);
 
-  const handleStopBreastfeeding = () => {
-    if (currentSession) {
-      const endTime = new Date();
-      const durationInMinutes = Math.floor(
-        (endTime.getTime() - currentSession.startTime.getTime()) / (1000 * 60)
+  const loadFeedingSessions = async () => {
+    try {
+      setIsLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let query = supabase
+        .from('feeding_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('start_time', { ascending: false });
+
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      if (dateRange === 'day') {
+        query = query
+          .gte('start_time', startOfDay.toISOString())
+          .lte('start_time', endOfDay.toISOString());
+      } else if (dateRange === 'week') {
+        const weekStart = startOfWeek(selectedDate);
+        const weekEnd = endOfWeek(selectedDate);
+        query = query
+          .gte('start_time', weekStart.toISOString())
+          .lte('start_time', weekEnd.toISOString());
+      }
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Supabase query error:', error);
+        throw error;
+      }
+      
+      if (!data) {
+        setFeedingSessions([]);
+        return;
+      }
+
+      const formattedSessions = (data as DatabaseFeedingSession[]).map(session => ({
+        ...session,
+        start_Time: new Date(session.start_time),
+        end_time: session.end_time ? new Date(session.end_time) : undefined,
+        foodType: session.food_type,
+      }));
+
+      setFeedingSessions(formattedSessions);
+    } catch (error) {
+      console.error('Error loading feeding sessions:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load feeding sessions. Please try again.',
+        [{ text: 'OK' }]
       );
-      const completedSession: FeedingSession = {
-        ...currentSession,
-        duration: durationInMinutes,
-      };
-      setFeedingSessions(prev => [completedSession, ...prev]);
-      setCurrentSession(null);
-      setShowTimer(false);
-      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleBottleFeeding = () => {
+  const saveFeedingSession = async (session: FeedingSession) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please login to save feeding sessions');
+        return;
+      }
+
+      const dbSession: DatabaseFeedingSession = {
+        type: session.type,
+        start_time: session.start_Time.toISOString(),
+        end_time: session.end_time?.toISOString(),
+        duration: session.duration,
+        amount: session.amount,
+        unit: session.unit,
+        side: session.side,
+        food_type: session.foodType,
+        notes: session.notes,
+        user_id: user.id,
+      };
+
+      const { data, error } = await supabase
+        .from('feeding_sessions')
+        .insert([dbSession])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const formattedSession: FeedingSession = {
+        ...data,
+        start_Time: new Date(data.start_time),
+        end_time: data.end_time ? new Date(data.end_time) : undefined,
+        foodType: data.food_type,
+      };
+
+      setFeedingSessions(prev => [formattedSession, ...prev]);
+    } catch (error) {
+      console.error('Error saving feeding session:', error);
+      Alert.alert('Error', 'Failed to save feeding session');
+    }
+  };
+
+  const handleStartBreastfeeding = async (side: 'left' | 'right') => {
+    try {
+      const newSession: FeedingSession = {
+        // id: crypto.randomUUID(),
+        type: 'breast',
+        start_Time: new Date(),
+        side,
+      };
+      setCurrentSession(newSession);
+      setShowTimer(true);
+      setShowNewSession(false);
+    } catch (error) {
+      console.error('Error starting breastfeeding session:', error);
+      Alert.alert('Error', 'Failed to start breastfeeding session');
+    }
+  };
+
+  const handleStopBreastfeeding = async () => {
+    try {
+      if (!currentSession) return;
+
+      const end_time = new Date();
+      const durationInMinutes = Math.floor(
+        (end_time.getTime() - currentSession.start_Time.getTime()) / (1000 * 60)
+      );
+      
+      const completedSession: FeedingSession = {
+        ...currentSession,
+        end_time,
+        duration: durationInMinutes,
+      };
+
+      await saveFeedingSession(completedSession);
+      setCurrentSession(null);
+      setShowTimer(false);
+      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+    } catch (error) {
+      console.error('Error stopping breastfeeding session:', error);
+      Alert.alert('Error', 'Failed to stop breastfeeding session');
+    }
+  };
+
+  const handleSwitchSide = async () => {
+    try {
+      if (!currentSession) return;
+
+      // Stop current session
+      await handleStopBreastfeeding();
+      
+      // Start new session with opposite side
+      const newSide = currentSession.side === 'left' ? 'right' : 'left';
+      await handleStartBreastfeeding(newSide);
+    } catch (error) {
+      console.error('Error switching sides:', error);
+      Alert.alert('Error', 'Failed to switch sides');
+    }
+  };
+
+  const handleBottleFeeding = async () => {
     const newSession: FeedingSession = {
-      id: Date.now().toString(),
       type: 'bottle',
-      startTime: new Date(),
+      start_Time: new Date(),
+      end_time: new Date(),
       amount: Number(amount),
       unit,
       notes,
     };
-    setFeedingSessions(prev => [newSession, ...prev]);
+    await saveFeedingSession(newSession);
     setShowNewSession(false);
     resetForm();
   };
 
-  const handleSolidFood = () => {
+  const handleSolidFood = async () => {
     const newSession: FeedingSession = {
-      id: Date.now().toString(),
+      user_id: user?.id,
       type: 'solid',
-      startTime: new Date(),
+      start_Time: new Date(),
+      end_time: new Date(),
       foodType,
       notes,
     };
-    setFeedingSessions(prev => [newSession, ...prev]);
+    await saveFeedingSession(newSession);
     setShowNewSession(false);
     resetForm();
   };
@@ -172,7 +316,7 @@ export default function FeedingScreen() {
 
   const getFilteredSessions = () => {
     return feedingSessions.filter(session => 
-      isSameDay(session.startTime, selectedDate)
+      isSameDay(session.start_Time, selectedDate)
     );
   };
 
@@ -248,19 +392,16 @@ export default function FeedingScreen() {
             <View style={styles.timerHeader}>
               <Timer size={24} color="#7C3AED" />
               <Text style={styles.timerTitle}>
-                Breastfeeding - {currentSession.side?.charAt(0).toUpperCase() + currentSession.side?.slice(1)} Side
+                Breastfeeding - {currentSession.side && currentSession.side.charAt(0).toUpperCase() + currentSession.side.slice(1)} Side
               </Text>
             </View>
             <Text style={styles.timerDisplay}>{formatTime(elapsedTime)}</Text>
             <Text style={styles.timerSubtext}>
-              Started at {format(currentSession.startTime, 'hh:mm a')}
+              Started at {format(currentSession.start_Time, 'hh:mm a')}
             </Text>
             <TouchableOpacity
               style={styles.switchSideButton}
-              onPress={() => {
-                handleStopBreastfeeding();
-                handleStartBreastfeeding(currentSession.side === 'left' ? 'right' : 'left');
-              }}>
+              onPress={handleSwitchSide}>
               <Text style={styles.switchSideText}>Switch Side</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -278,7 +419,7 @@ export default function FeedingScreen() {
               <View style={styles.feedingTime}>
                 <Clock size={16} color="#6B7280" />
                 <Text style={styles.feedingTimeText}>
-                  {format(session.startTime, 'hh:mm a')}
+                  {format(session.start_Time, 'hh:mm a')}
                 </Text>
               </View>
               <View style={styles.feedingDetails}>
@@ -746,5 +887,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
+  },
+  bottleOptions: {
+    gap: 16,
+  },
+  solidOptions: {
+    gap: 16,
   },
 });

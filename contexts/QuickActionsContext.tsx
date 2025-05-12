@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { Alert } from 'react-native';
 
 type QuickAction = {
   id: string;
@@ -13,41 +14,60 @@ type QuickActionsContextType = {
   actions: QuickAction[];
   updateLastUsed: (type: string) => Promise<void>;
   getLastUsed: (type: string) => Date | null;
+  isLoading: boolean;
 };
 
 const QuickActionsContext = createContext<QuickActionsContextType | undefined>(undefined);
 
 export function QuickActionsProvider({ children }: { children: React.ReactNode }) {
   const [actions, setActions] = useState<QuickAction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
     if (user) {
       loadQuickActions();
+    } else {
+      setActions([]);
     }
   }, [user]);
 
   const loadQuickActions = async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('quick_actions')
         .select('*')
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .order('last_used', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST301') {
+          // Session expired, will be handled by auth
+          return;
+        }
+        throw error;
+      }
 
       if (data) {
         const quickActions = data.map(action => ({
           id: action.id,
           type: action.type,
           lastUsed: new Date(action.last_used),
-          metadata: action.metadata,
+          metadata: action.metadata || {},
         }));
         setActions(quickActions);
       }
     } catch (error) {
       console.error('Error loading quick actions:', error);
+      // Don't show alert for network errors as they're temporary
+      if (error instanceof Error && !error.message.includes('Network request failed')) {
+        Alert.alert('Error', 'Failed to load quick actions');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -55,7 +75,7 @@ export function QuickActionsProvider({ children }: { children: React.ReactNode }
     if (!user) return;
     
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('quick_actions')
         .upsert({
           user_id: user.id,
@@ -63,13 +83,43 @@ export function QuickActionsProvider({ children }: { children: React.ReactNode }
           last_used: new Date().toISOString(),
         }, {
           onConflict: 'user_id,type'
+        })
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST301') {
+          // Session expired, will be handled by auth
+          return;
+        }
+        throw error;
+      }
+
+      if (data) {
+        setActions(prevActions => {
+          const existingAction = prevActions.find(a => a.type === type);
+          if (existingAction) {
+            return prevActions.map(a => 
+              a.type === type 
+                ? { ...a, lastUsed: new Date(data.last_used) }
+                : a
+            );
+          } else {
+            return [...prevActions, {
+              id: data.id,
+              type: data.type,
+              lastUsed: new Date(data.last_used),
+              metadata: data.metadata || {}
+            }];
+          }
         });
-
-      if (error) throw error;
-
-      await loadQuickActions();
+      }
     } catch (error) {
       console.error('Error updating quick action:', error);
+      // Don't show alert for network errors as they're temporary
+      if (error instanceof Error && !error.message.includes('Network request failed')) {
+        Alert.alert('Error', 'Failed to update quick action');
+      }
     }
   };
 
@@ -84,6 +134,7 @@ export function QuickActionsProvider({ children }: { children: React.ReactNode }
         actions,
         updateLastUsed,
         getLastUsed,
+        isLoading,
       }}>
       {children}
     </QuickActionsContext.Provider>
