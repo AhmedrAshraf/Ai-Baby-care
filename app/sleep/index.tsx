@@ -41,6 +41,7 @@ import {
 } from 'date-fns';
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 type SleepSession = {
   id?: string;
@@ -73,6 +74,16 @@ type DailySleepStats = {
   quality: 'poor' | 'fair' | 'good' | 'excellent';
 };
 
+type SleepSessionState = {
+  id: string;
+  type: 'nap' | 'night';
+  start_time: string;
+  end_time: string | null;
+  duration: number | null;
+  is_running: boolean;
+  user_id: string;
+};
+
 export default function SleepScreen() {
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const DAY_WIDTH = (SCREEN_WIDTH - 40) / 7;
@@ -92,12 +103,43 @@ export default function SleepScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [sessions, setSessions] = useState<SleepSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [realtimeSubscription, setRealtimeSubscription] = useState<RealtimeChannel | null>(null);
 
   // Load sleep sessions
   const loadSleepSessions = async () => {
     try {
       setIsLoading(true);
       if (!user) return;
+
+      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+
+      const { data: runningSession, error: runningError } = await supabase
+        .from('sleep_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_running', true)
+        .single();
+
+      if (runningError && runningError.code !== 'PGRST116') {
+        console.error('Error checking running session:', runningError);
+      }
+
+      if (runningSession) {
+        setCurrentSession({
+          ...runningSession,
+          start_time: new Date(runningSession.start_time),
+          end_time: runningSession.end_time ? new Date(runningSession.end_time) : undefined,
+        });
+        setIsTracking(true);
+
+        const startTime = new Date(runningSession.start_time);
+        const now = new Date();
+        const diffInSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+        const hours = Math.floor(diffInSeconds / 3600);
+        const minutes = Math.floor((diffInSeconds % 3600) / 60);
+        const seconds = diffInSeconds % 60;
+        setElapsedTime({ hours, minutes, seconds });
+      }
 
       const startOfDay = new Date(selectedDate);
       startOfDay.setHours(0, 0, 0, 0);
@@ -131,29 +173,77 @@ export default function SleepScreen() {
     }
   };
 
-  // Load sessions when date changes
+  // Load sessions when date changes or when app starts
   useEffect(() => {
     loadSleepSessions();
   }, [selectedDate, user]);
 
-  // Timer effect
+  // Subscribe to real-time session updates
+  useEffect(() => {
+    if (!user) return;
+
+    const subscription = supabase
+      .channel('sleep_sessions_changes')
+      .on(
+        'postgres_changes' as any,
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sleep_sessions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload: { new: SleepSessionState }) => {
+          if (payload.new) {
+
+            if (payload.new.is_running) {
+              setIsTracking(true);
+              setCurrentSession({
+                id: payload.new.id,
+                type: payload.new.type,
+                start_time: new Date(payload.new.start_time),
+                user_id: user.id,
+              });
+            } else {
+              setIsTracking(false);
+              setCurrentSession(null);
+              loadSleepSessions();
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    setRealtimeSubscription(subscription);
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user]);
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isTracking && currentSession) {
-      interval = setInterval(() => {
+      interval = setInterval(async () => {
         const now = new Date();
         const startTime = new Date(currentSession.start_time);
 
-        // Ensure we're working with valid dates
-        if (isNaN(startTime.getTime()) || isNaN(now.getTime())) {
-          console.error('Invalid date detected in timer');
-          return;
+        const newDuration = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
+        
+        if (newDuration % 1 === 0) {
+          const { error } = await supabase
+            .from('sleep_sessions')
+            .update({
+              duration: newDuration,
+            })
+            .eq('id', currentSession.id)
+            .eq('is_running', true);
+
+          if (error) {
+            console.error('Error updating session:', error);
+          }
         }
 
-        const diffInSeconds = Math.floor(
-          (now.getTime() - startTime.getTime()) / 1000
-        );
-
+        const diffInSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
         const hours = Math.floor(diffInSeconds / 3600);
         const minutes = Math.floor((diffInSeconds % 3600) / 60);
         const seconds = diffInSeconds % 60;
@@ -171,19 +261,18 @@ export default function SleepScreen() {
         return;
       }
 
-      const newSession: SleepSession = {
-        type,
-        start_time: new Date(),
-        user_id: user.id,
-      };
+      const start_time = new Date();
 
+      // Create new sleep session
       const { data, error } = await supabase
         .from('sleep_sessions')
         .insert([
           {
-            type: newSession.type,
-            start_time: newSession.start_time.toISOString(),
-            user_id: newSession.user_id,
+            type,
+            start_time: start_time.toISOString(),
+            user_id: user.id,
+            is_running: true,
+            duration: 0,
           },
         ])
         .select()
@@ -194,7 +283,6 @@ export default function SleepScreen() {
       setCurrentSession({
         ...data,
         start_time: new Date(data.start_time),
-        end_time: data.end_time ? new Date(data.end_time) : undefined,
       });
       setIsTracking(true);
       setShowSleepOptions(false);
@@ -207,68 +295,62 @@ export default function SleepScreen() {
 
   const stopTracking = async () => {
     try {
-      if (!currentSession || !user) return;
+      if (!currentSession || !user) {
+        Alert.alert('Error', 'No active sleep session to stop');
+        return;
+      }
 
       const end_time = new Date();
       const start_time = new Date(currentSession.start_time);
+      const durationInMinutes = Math.floor((end_time.getTime() - start_time.getTime()) / (1000 * 60));
 
-      // Ensure we're working with valid dates
-      if (isNaN(start_time.getTime()) || isNaN(end_time.getTime())) {
-        Alert.alert(
-          'Invalid Time',
-          'Unable to calculate sleep duration. Please try again.'
-        );
-        return;
-      }
+      // Show confirmation dialog
+      Alert.alert(
+        'Stop Sleep Tracking',
+        'Are you sure you want to stop tracking this sleep session?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Stop',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Update sleep session
+                const { error } = await supabase
+                  .from('sleep_sessions')
+                  .update({
+                    end_time: end_time.toISOString(),
+                    duration: durationInMinutes,
+                    is_running: false,
+                  })
+                  .eq('id', currentSession.id);
 
-      // Calculate duration in minutes
-      const durationInMinutes = Math.max(
-        0,
-        Math.floor((end_time.getTime() - start_time.getTime()) / (1000 * 60))
+                if (error) throw error;
+
+                const completedSession: SleepSession = {
+                  ...currentSession,
+                  end_time,
+                  duration: durationInMinutes,
+                };
+
+                setSessions((prev) => [completedSession, ...prev]);
+                setCurrentSession(null);
+                setIsTracking(false);
+                setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+              } catch (error) {
+                console.error('Error stopping sleep session:', error);
+                Alert.alert('Error', 'Failed to stop sleep session. Please try again.');
+              }
+            },
+          },
+        ]
       );
-
-      // Validate duration
-      if (durationInMinutes > 1440) {
-        // 24 hours in minutes
-        Alert.alert(
-          'Invalid Duration',
-          'Sleep duration cannot exceed 24 hours. Please check your device time settings.'
-        );
-        return;
-      }
-
-      console.log('Updating session with:', {
-        id: currentSession.id,
-        end_time: end_time.toISOString(),
-        duration: durationInMinutes,
-      });
-
-      const { error } = await supabase
-        .from('sleep_sessions')
-        .update({
-          end_time: end_time.toISOString(),
-          duration: durationInMinutes,
-        })
-        .eq('id', currentSession.id);
-
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
-
-      const completedSession: SleepSession = {
-        ...currentSession,
-        end_time,
-        duration: durationInMinutes,
-      };
-
-      setSessions((prev) => [completedSession, ...prev]);
-      setCurrentSession(null);
-      setIsTracking(false);
-      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
     } catch (error) {
-      console.error('Error stopping sleep session:', error);
-      Alert.alert('Error', 'Failed to stop sleep session. Please try again.');
+      console.error('Error in stop tracking process:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
