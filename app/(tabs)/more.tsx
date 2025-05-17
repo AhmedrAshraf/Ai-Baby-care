@@ -181,7 +181,8 @@ export default function MoreScreen() {
         style={styles.header}>
         <TouchableOpacity 
           style={styles.profile}
-          onPress={() => setShowProfileModal(true)}>
+          // onPress={() => setShowProfileModal(true)}>
+          onPress={() => router.push('/edit-profile')}>
           <View style={styles.avatarContainer}>
             {profileImage || user?.user_metadata.baby_photo_url ? (
               <Image

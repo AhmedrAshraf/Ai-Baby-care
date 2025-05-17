@@ -8,6 +8,7 @@ type AuthContextType = {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  setUser: (user: User) => void;
   signUp: (email: string, password: string, metadata?: { [key: string]: any }) => Promise<{ data: any; error: any }>;
   signIn: (email: string, password: string) => Promise<{ user: User; session: Session; weakPassword?: WeakPassword }>;
   signOut: () => Promise<void>;
@@ -167,6 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signIn,
       signOut,
+      setUser
     }}>
       {children}
     </AuthContext.Provider>
