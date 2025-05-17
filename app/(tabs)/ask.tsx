@@ -13,7 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Mic, Send, CircleAlert as AlertCircle } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
-import { supabase } from '@/utils/supabase';
+import { getBabyCareResponse } from '@/utils/gemini';
 
 type Message = {
   id: string;
@@ -26,7 +26,7 @@ type Message = {
 const INITIAL_MESSAGES: Message[] = [
   {
     id: '1',
-    text: "Hello! I'm your AI baby care assistant. I can provide information from trusted sources like WebMD and BabyCenter. How can I help you today?",
+    text: "Hello! I'm your AI baby care assistant powered by Google's Gemini. I can provide helpful advice and information about baby care. How can I assist you today?",
     isUser: false,
     timestamp: new Date(),
   },
@@ -54,32 +54,14 @@ export default function AskScreen() {
     setIsLoading(true);
 
     try {
-      const { data: { publicUrl } } = await supabase.storage.from('public').getPublicUrl('ask-ai');
-      const response = await fetch(`${publicUrl}/ask-ai`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ query: userMessage.text }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get AI response');
-      }
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      const { response, sources } = await getBabyCareResponse(userMessage.text);
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: data.response,
+        text: response,
         isUser: false,
         timestamp: new Date(),
-        sources: data.sources,
+        sources,
       };
 
       setMessages(prev => [...prev, aiMessage]);
