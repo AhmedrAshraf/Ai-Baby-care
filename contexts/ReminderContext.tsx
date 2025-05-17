@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { 
+  registerForPushNotificationsAsync, 
+  scheduleReminderNotification, 
+  cancelScheduledNotification,
+  rescheduleNotification
+} from '@/utils/notifications';
 
 type ReminderType = 'feeding' | 'sleep' | 'medication' | 'appointment';
 type RepeatType = 'none' | 'daily' | 'weekly';
@@ -14,6 +20,7 @@ export type Reminder = {
   repeat: RepeatType;
   enabled: boolean;
   metadata: Record<string, any>;
+  notificationId?: string;
 };
 
 type ReminderContextType = {
@@ -33,6 +40,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (user) {
       loadReminders();
+      registerForPushNotificationsAsync();
     }
   }, [user]);
 
@@ -52,6 +60,16 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
           time: new Date(reminder.time),
         }));
         setReminders(formattedReminders);
+        
+        // Schedule notifications for all enabled reminders
+        formattedReminders.forEach(async (reminder) => {
+          if (reminder.enabled) {
+            const notificationId = await scheduleReminderNotification(reminder);
+            if (notificationId) {
+              updateReminder(reminder.id, { notificationId });
+            }
+          }
+        });
       }
     } catch (error) {
       console.error('Error loading reminders:', error);
@@ -60,7 +78,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
   const addReminder = async (reminder: Omit<Reminder, 'id'>) => {
     try {
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('reminders')
         .insert({
           user_id: user?.id,
@@ -71,11 +89,29 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
           repeat: reminder.repeat,
           enabled: reminder.enabled,
           metadata: reminder.metadata,
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      await loadReminders();
+      if (data) {
+        const newReminder = { ...data, time: new Date(data.time) };
+        
+        // Schedule notification if reminder is enabled
+        if (newReminder.enabled) {
+          const notificationId = await scheduleReminderNotification(newReminder);
+          if (notificationId) {
+            newReminder.notificationId = notificationId;
+            await supabase
+              .from('reminders')
+              .update({ metadata: { ...newReminder.metadata, notificationId } })
+              .eq('id', newReminder.id);
+          }
+        }
+        
+        setReminders(prev => [...prev, newReminder]);
+      }
     } catch (error) {
       console.error('Error adding reminder:', error);
       throw error;
@@ -84,6 +120,14 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
   const updateReminder = async (id: string, updates: Partial<Reminder>) => {
     try {
+      const reminder = reminders.find(r => r.id === id);
+      if (!reminder) return;
+
+      // Cancel existing notification if it exists
+      if (reminder.notificationId) {
+        await cancelScheduledNotification(reminder.notificationId);
+      }
+
       const { error } = await supabase
         .from('reminders')
         .update({
@@ -96,9 +140,33 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
+      const updatedReminder = { ...reminder, ...updates };
+      
+      // Schedule new notification if reminder is enabled
+      if (updatedReminder.enabled) {
+        const notificationId = await scheduleReminderNotification(updatedReminder);
+        if (notificationId) {
+          updatedReminder.notificationId = notificationId;
+          await supabase
+            .from('reminders')
+            .update({ 
+              metadata: { 
+                ...updatedReminder.metadata, 
+                notificationId 
+              } 
+            })
+            .eq('id', id);
+        }
+      }
+
       setReminders(prev => prev.map(reminder =>
-        reminder.id === id ? { ...reminder, ...updates } : reminder
+        reminder.id === id ? updatedReminder : reminder
       ));
+
+      // Handle repeating reminders
+      if (updatedReminder.repeat !== 'none' && updatedReminder.enabled) {
+        await rescheduleNotification(updatedReminder);
+      }
     } catch (error) {
       console.error('Error updating reminder:', error);
       throw error;
@@ -107,6 +175,14 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
 
   const deleteReminder = async (id: string) => {
     try {
+      const reminder = reminders.find(r => r.id === id);
+      if (!reminder) return;
+
+      // Cancel notification if it exists
+      if (reminder.notificationId) {
+        await cancelScheduledNotification(reminder.notificationId);
+      }
+
       const { error } = await supabase
         .from('reminders')
         .delete()
