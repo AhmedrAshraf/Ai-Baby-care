@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Volume2, Pause, Play, Clock, Moon, Wind, Waves, ArrowLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useWhiteNoiseContext } from '@/contexts/WhiteNoiseContext';
+import Header from '@/components/Header';
 
 const SOUNDS = [
   { id: 'white', title: 'White Noise', icon: Volume2, type: 'white' as const, color: '#8B5CF6' },
@@ -18,37 +19,31 @@ export default function WhiteNoiseScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#7C3AED', '#6D28D9']}
-        style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>White Noise</Text>
-        </View>
-
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, false && styles.activeTab]}
-            onPress={() => router.back()}>
-            <Moon size={20} color={false ? '#7C3AED' : '#FFFFFF'} />
-            <Text style={[styles.tabText, false && styles.activeTabText]}>
-              Sleep
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, true && styles.activeTab]}
-            onPress={() => {}}>
-            <Volume2 size={20} color={true ? '#7C3AED' : '#FFFFFF'} />
-            <Text style={[styles.tabText, true && styles.activeTabText]}>
-              White Noise
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+      <Header
+        title="White Noise"
+        showBackButton
+        useGradient
+        bottomElement={
+          <View style={styles.tabsContainer}>
+            <TouchableOpacity
+              style={[styles.tab, false && styles.activeTab]}
+              onPress={() => router.back()}>
+              <Moon size={20} color={false ? '#7C3AED' : '#FFFFFF'} />
+              <Text style={[styles.tabText, false && styles.activeTabText]}>
+                Sleep
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, true && styles.activeTab]}
+              onPress={() => {}}>
+              <Volume2 size={20} color={true ? '#7C3AED' : '#FFFFFF'} />
+              <Text style={[styles.tabText, true && styles.activeTabText]}>
+                White Noise
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       <ScrollView style={styles.content}>
         <View style={styles.player}>
@@ -129,43 +124,19 @@ export default function WhiteNoiseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    
-    marginBottom: 20,
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
+    backgroundColor: '#F3F4F6',
   },
   tabsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
     gap: 8,
   },
   tab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 9999,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     gap: 8,
   },
   activeTab: {
@@ -173,8 +144,8 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
   },
   activeTabText: {
     color: '#7C3AED',

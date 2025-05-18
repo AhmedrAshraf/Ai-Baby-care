@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Clock, Filter, ChevronLeft, ChevronRight, Activity } from 'lucide-react-native';
 import { format, subDays } from 'date-fns';
 import { useActivityLog } from '@/contexts/ActivityLogContext';
+import Header from '@/components/Header';
 
 export default function ActivityHistoryScreen() {
   const { getActivityHistory, loading, error } = useActivityLog();
@@ -48,35 +49,35 @@ export default function ActivityHistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#7C3AED', '#6D28D9']}
-        style={styles.header}>
-        <Text style={styles.headerTitle}>Activity History</Text>
-        
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={[styles.filterButton, dateRange === 7 && styles.filterButtonActive]}
-            onPress={() => setDateRange(7)}>
-            <Text style={[styles.filterButtonText, dateRange === 7 && styles.filterButtonTextActive]}>
-              7 Days
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, dateRange === 30 && styles.filterButtonActive]}
-            onPress={() => setDateRange(30)}>
-            <Text style={[styles.filterButtonText, dateRange === 30 && styles.filterButtonTextActive]}>
-              30 Days
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.filterButton, dateRange === 90 && styles.filterButtonActive]}
-            onPress={() => setDateRange(90)}>
-            <Text style={[styles.filterButtonText, dateRange === 90 && styles.filterButtonTextActive]}>
-              90 Days
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+      <Header
+        title="Activity History"
+        useGradient
+        bottomElement={
+          <View style={styles.filterContainer}>
+            <TouchableOpacity
+              style={[styles.filterButton, dateRange === 7 && styles.filterButtonActive]}
+              onPress={() => setDateRange(7)}>
+              <Text style={[styles.filterButtonText, dateRange === 7 && styles.filterButtonTextActive]}>
+                7 Days
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, dateRange === 30 && styles.filterButtonActive]}
+              onPress={() => setDateRange(30)}>
+              <Text style={[styles.filterButtonText, dateRange === 30 && styles.filterButtonTextActive]}>
+                30 Days
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterButton, dateRange === 90 && styles.filterButtonActive]}
+              onPress={() => setDateRange(90)}>
+              <Text style={[styles.filterButtonText, dateRange === 90 && styles.filterButtonTextActive]}>
+                90 Days
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
 
       <ScrollView style={styles.content}>
         {error && (

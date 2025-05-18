@@ -1,25 +1,31 @@
-import { useEffect } from 'react';
+import React from 'react';
 import { Stack } from 'expo-router';
+import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { AuthProvider } from '@/contexts/AuthContext';
-import { SleepProvider } from '@/contexts/SleepContext';
+import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
 import { QuickActionsProvider } from '@/contexts/QuickActionsContext';
+import { FeedingProvider } from '@/contexts/FeedingContext';
+import { SidebarProvider } from '@/contexts/SidebarContext';
+import { SleepProvider } from '@/contexts/SleepContext';
+import Sidebar from '../components/Sidebar';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 import { DiaperProvider } from '@/contexts/DiaperContext';
 import { VaccinationProvider } from '@/contexts/VaccinationContext';
 import { MedicationProvider } from '@/contexts/MedicationContext';
-import { HealthLogProvider } from '@/contexts/HealthLogContext';
-import { ReminderProvider } from '@/contexts/ReminderContext';
-import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
-import { View, ActivityIndicator } from 'react-native';
-import { FeedingProvider } from '@/contexts/FeedingContext';
+import { MilestoneProvider } from '@/contexts/MilestoneContext';
+import { WhiteNoiseProvider } from '@/contexts/WhiteNoiseContext';
 
 export default function RootLayout() {
-  useFrameworkReady();
-
   const [fontsLoaded] = useFonts({
     'Inter-Regular': Inter_400Regular,
+    'Inter-Medium': Inter_500Medium,
     'Inter-SemiBold': Inter_600SemiBold,
     'Inter-Bold': Inter_700Bold,
   });
@@ -34,35 +40,31 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <ActivityLogProvider>
-        <QuickActionsProvider>
-          <FeedingProvider>
-          <SleepProvider>
-            <DiaperProvider>
-              <VaccinationProvider>
-                <MedicationProvider>
-                  <HealthLogProvider>
-                    <ReminderProvider>
-                      <Stack screenOptions={{ headerShown: false }}>
-                        <Stack.Screen name="index" />
-                        <Stack.Screen name="login" />
-                        {/* <Stack.Screen name="register" /> */}
-                        <Stack.Screen name="verify" />
-                        {/* <Stack.Screen name="forgot-password" /> */}
-                        <Stack.Screen name="(auth)" />
-                        <Stack.Screen name="(tabs)" />
-                        <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
-                      </Stack>
-                      <StatusBar style="auto" />
-                    </ReminderProvider>
-                  </HealthLogProvider>
+      <SidebarProvider>
+        <ActivityLogProvider>
+          <DiaperProvider>
+            <WhiteNoiseProvider>
+              <MilestoneProvider>
+                <VaccinationProvider>
+                  <MedicationProvider>
+                  <QuickActionsProvider>
+                    <FeedingProvider>
+                      <SleepProvider>
+                        <View style={{ flex: 1 }}>
+                          <StatusBar style="dark" />
+                          <Stack screenOptions={{ headerShown: false }} />
+                          <Sidebar />
+                        </View>
+                      </SleepProvider>
+                    </FeedingProvider>
+                  </QuickActionsProvider>
                 </MedicationProvider>
-              </VaccinationProvider>
-            </DiaperProvider>
-          </SleepProvider>
-          </FeedingProvider>
-        </QuickActionsProvider>
-      </ActivityLogProvider>
+                </VaccinationProvider>
+              </MilestoneProvider>
+            </WhiteNoiseProvider>
+          </DiaperProvider>
+        </ActivityLogProvider>
+      </SidebarProvider>
     </AuthProvider>
   );
 }

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Moon, Sun, Baby, Utensils, Plus, Camera, Activity, Syringe, Volume2, MessageCircle, Scroll, Variable as BabyCarriage, Users, Brain, Dumbbell, Music, CircleAlert as AlertCircle, Bell } from 'lucide-react-native';
+import { Moon, Sun, Baby, Utensils, Plus, Camera, Activity, Syringe, Volume2, MessageCircle, Scroll, Variable as BabyCarriage, Users, Brain, Dumbbell, Music, CircleAlert as AlertCircle, Bell, Menu } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSleepContext } from '@/contexts/SleepContext';
 import { format, formatDistanceToNow } from 'date-fns';
 import { QuickAction } from '@/components/QuickAction';
+import { useSidebar } from '@/contexts/SidebarContext';
+import Header from '@/components/Header';
 
 type UserProfile = {
   parent_name: string;
@@ -18,6 +20,7 @@ type UserProfile = {
 export default function TodayScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { toggleSidebar } = useSidebar();
   const [currentTime, setCurrentTime] = useState(new Date());
   const { currentSession, stopSleepSession, saveSleepSession, setCurrentSession } = useSleepContext();
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -65,8 +68,10 @@ export default function TodayScreen() {
     }
   };
 
-  const formatScheduleTime = (time: Date) => {
-    return format(time, 'h:mm a');
+  const formatScheduleTime = (hours: number, minutes: number) => {
+    const date = new Date();
+    date.setHours(hours, minutes);
+    return format(date, 'h:mm a');
   };
 
   const getBabyAge = () => {
@@ -76,12 +81,20 @@ export default function TodayScreen() {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-       <LinearGradient
+      <LinearGradient
         colors={['#7C3AED', '#6D28D9']}
-        style={styles.header}>
+        style={styles.header}
+      >
         <View style={styles.headerContent}>
-          <Text style={styles.greeting}>{getGreeting()},</Text>
-          <Text style={styles.name}>{userProfile?.parent_name || user?.email?.split('@')?.[0] || 'Parent'}</Text>
+          <View style={styles.topRow}>
+            <View style={styles.greetingSection}>
+              <Text style={styles.greeting}>{getGreeting()},</Text>
+              <Text style={styles.name}>{userProfile?.parent_name || user?.email?.split('@')?.[0] || 'Parent'}</Text>
+            </View>
+            <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
+              <Menu size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
           <View style={styles.babyInfo}>
             <View style={styles.babyProfile}>
               <Image
@@ -139,7 +152,7 @@ export default function TodayScreen() {
             type="health"
             icon={<Activity size={24} color="#FFFFFF" />}
             title="Baby Health Log"
-            onPress={() => router.push('/(tabs)/health-log')}
+            onPress={() => router.push('/health-log')}
             color="#10B981"
           />
 
@@ -155,7 +168,7 @@ export default function TodayScreen() {
             type="milestones"
             icon={<Scroll size={24} color="#FFFFFF" />}
             title="Milestones"
-            onPress={() => router.push('/(tabs)/milestones')}
+            onPress={() => router.push('/milestones')}
             color="#6366F1"
           />
 
@@ -189,7 +202,7 @@ export default function TodayScreen() {
         <Text style={styles.sectionTitle}>Today's Schedule</Text>
         <View style={styles.scheduleCard}>
           <View style={styles.scheduleTime}>
-            <Text style={styles.timeText}>{formatScheduleTime(new Date().setHours(7, 0))}</Text>
+            <Text style={styles.timeText}>{formatScheduleTime(7, 0)}</Text>
             <View style={[styles.timeIndicator, { backgroundColor: '#FCD34D' }]} />
           </View>
           <View style={styles.scheduleContent}>
@@ -201,7 +214,7 @@ export default function TodayScreen() {
 
         <View style={styles.scheduleCard}>
           <View style={styles.scheduleTime}>
-            <Text style={styles.timeText}>{formatScheduleTime(new Date().setHours(8, 30))}</Text>
+            <Text style={styles.timeText}>{formatScheduleTime(8, 30)}</Text>
             <View style={[styles.timeIndicator, { backgroundColor: '#8B5CF6' }]} />
           </View>
           <View style={styles.scheduleContent}>
@@ -218,7 +231,7 @@ export default function TodayScreen() {
           <View style={styles.analysisContent}>
             <Text style={styles.analysisTitle}>Sweet Spot for Bedtime</Text>
             <Text style={styles.analysisDescription}>
-              Based on {userProfile?.baby_name || 'your baby'}'s sleep patterns, the ideal bedtime is between {formatScheduleTime(new Date().setHours(19, 0))} and {formatScheduleTime(new Date().setHours(19, 30))}
+              Based on {userProfile?.baby_name || 'your baby'}'s sleep patterns, the ideal bedtime is between {formatScheduleTime(19, 0)} and {formatScheduleTime(19, 30)}
             </Text>
           </View>
         </View>
@@ -306,12 +319,20 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 60,
     paddingBottom: 30,
-    paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
   headerContent: {
-    marginTop: 20,
+    paddingHorizontal: 20,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  greetingSection: {
+    flex: 1,
   },
   greeting: {
     color: '#E5E7EB',
@@ -325,8 +346,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textTransform: 'capitalize',
   },
+  menuButton: {
+    padding: 8,
+    marginLeft: 16,
+  },
   babyInfo: {
-    marginTop: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     padding: 16,
     borderRadius: 16,

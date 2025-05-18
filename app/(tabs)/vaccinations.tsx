@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { format, addDays, subDays, startOfWeek, endOfWeek, isSameDay, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { useVaccinationContext } from '@/contexts/VaccinationContext';
 import { useMedicationContext } from '@/contexts/MedicationContext';
+import Header from '@/components/Header';
 
 type DateRange = 'day' | 'week' | 'month';
 
@@ -149,53 +150,56 @@ export default function VaccinationsScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#7C3AED', '#6D28D9']}
-        style={styles.header}>
-        <Text style={styles.headerTitle}>Health Records</Text>
-        <View style={styles.dateControls}>
-          <View style={styles.dateRangeSelector}>
-            {(['day', 'week', 'month'] as DateRange[]).map((range) => (
+      <Header
+        title="Health Records"
+        useGradient
+        bottomElement={
+          <>
+            <View style={styles.dateControls}>
+              <View style={styles.dateRangeSelector}>
+                {(['day', 'week', 'month'] as DateRange[]).map((range) => (
+                  <TouchableOpacity
+                    key={range}
+                    style={[styles.dateRangeButton, dateRange === range && styles.dateRangeButtonActive]}
+                    onPress={() => setDateRange(range)}>
+                    <Text style={[styles.dateRangeText, dateRange === range && styles.dateRangeTextActive]}>
+                      {range.charAt(0).toUpperCase() + range.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.dateNavigator}>
+                <TouchableOpacity onPress={() => navigateDate('prev')}>
+                  <ChevronLeft size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <Text style={styles.dateRangeLabel}>{getDateRangeText()}</Text>
+                <TouchableOpacity onPress={() => navigateDate('next')}>
+                  <ChevronRight size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.tabsContainer}>
               <TouchableOpacity
-                key={range}
-                style={[styles.dateRangeButton, dateRange === range && styles.dateRangeButtonActive]}
-                onPress={() => setDateRange(range)}>
-                <Text style={[styles.dateRangeText, dateRange === range && styles.dateRangeTextActive]}>
-                  {range.charAt(0).toUpperCase() + range.slice(1)}
+                style={[styles.tab, activeTab === 'vaccinations' && styles.activeTab]}
+                onPress={() => setActiveTab('vaccinations')}>
+                <Syringe size={20} color={activeTab === 'vaccinations' ? '#7C3AED' : '#FFFFFF'} />
+                <Text style={[styles.tabText, activeTab === 'vaccinations' && styles.activeTabText]}>
+                  Vaccinations
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.dateNavigator}>
-            <TouchableOpacity onPress={() => navigateDate('prev')}>
-              <ChevronLeft size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-            <Text style={styles.dateRangeLabel}>{getDateRangeText()}</Text>
-            <TouchableOpacity onPress={() => navigateDate('next')}>
-              <ChevronRight size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'vaccinations' && styles.activeTab]}
-            onPress={() => setActiveTab('vaccinations')}>
-            <Syringe size={20} color={activeTab === 'vaccinations' ? '#7C3AED' : '#FFFFFF'} />
-            <Text style={[styles.tabText, activeTab === 'vaccinations' && styles.activeTabText]}>
-              Vaccinations
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'medications' && styles.activeTab]}
-            onPress={() => setActiveTab('medications')}>
-            <AlertCircle size={20} color={activeTab === 'medications' ? '#7C3AED' : '#FFFFFF'} />
-            <Text style={[styles.tabText, activeTab === 'medications' && styles.activeTabText]}>
-              Medications
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'medications' && styles.activeTab]}
+                onPress={() => setActiveTab('medications')}>
+                <AlertCircle size={20} color={activeTab === 'medications' ? '#7C3AED' : '#FFFFFF'} />
+                <Text style={[styles.tabText, activeTab === 'medications' && styles.activeTabText]}>
+                  Medications
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        }
+      />
 
       <ScrollView style={styles.content}>
         {getFilteredItems().map(item => (

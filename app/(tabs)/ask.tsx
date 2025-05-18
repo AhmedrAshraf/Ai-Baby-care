@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Mic, Send, CircleAlert as AlertCircle } from 'lucide-react-native';
 import * as Speech from 'expo-speech';
 import { getBabyCareResponse } from '@/utils/gemini';
+import Header from '@/components/Header';
 
 type Message = {
   id: string;
@@ -124,102 +125,100 @@ export default function AskScreen() {
   );
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}>
-      <LinearGradient
-        colors={['#7C3AED', '#6D28D9']}
-        style={styles.header}>
-        <Text style={styles.headerTitle}>Ask AI Assistant</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Ask me anything about baby care..."
-            placeholderTextColor="rgba(255, 255, 255, 0.6)"
-            multiline
-            maxLength={500}
-            editable={!isLoading}
-          />
-          <View style={styles.inputActions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={toggleRecording}
-              disabled={isLoading}>
-              <Mic
-                size={24}
-                color={isRecording ? '#EF4444' : '#FFFFFF'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.sendButton]}
-              onPress={handleSend}
-              disabled={!inputText.trim() || isLoading}>
-              {isLoading ? (
-                <ActivityIndicator color="#7C3AED" />
-              ) : (
-                <Send size={24} color="#7C3AED" />
-              )}
-            </TouchableOpacity>
+    <View style={styles.container}>
+      <Header
+        title="Ask AI Assistant"
+        useGradient
+        bottomElement={
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Ask me anything about baby care..."
+              placeholderTextColor="rgba(255, 255, 255, 0.6)"
+              multiline
+              maxLength={500}
+              editable={!isLoading}
+            />
+            <View style={styles.inputActions}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={toggleRecording}
+                disabled={isLoading}>
+                <Mic
+                  size={24}
+                  color={isRecording ? '#EF4444' : '#FFFFFF'}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.sendButton]}
+                onPress={handleSend}
+                disabled={!inputText.trim() || isLoading}>
+                {isLoading ? (
+                  <ActivityIndicator color="#7C3AED" />
+                ) : (
+                  <Send size={24} color="#7C3AED" />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      </LinearGradient>
+        }
+      />
 
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd()}
-        showsVerticalScrollIndicator={false}>
-        {messages.map(renderMessage)}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}>
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd()}
+          showsVerticalScrollIndicator={false}>
+          {messages.map(renderMessage)}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F3F4F6',
   },
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontFamily: 'Inter-Bold',
-    marginBottom: 16,
+  keyboardView: {
+    flex: 1,
   },
   inputContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 16,
-    padding: 12,
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   input: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 12,
+    color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    color: '#FFFFFF',
-    minHeight: 40,
+    minHeight: 48,
+    maxHeight: 120,
   },
   inputActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
     marginTop: 8,
+    gap: 8,
   },
   actionButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
   },
   sendButton: {
     backgroundColor: '#FFFFFF',
@@ -228,8 +227,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messagesContent: {
-    padding: 20,
-    paddingTop: 10,
+    padding: 16,
+    gap: 16,
   },
   messageContainer: {
     maxWidth: '80%',
