@@ -5,6 +5,7 @@ import { CircleAlert as AlertCircle, Plus, X, Camera, Thermometer, Clock, Chevro
 import { format, addDays, subDays, startOfWeek, endOfWeek, isSameDay, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { useHealthLogContext, HealthIssue, Severity, HealthLog } from '@/contexts/HealthLogContext';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 
 type DateRange = 'day' | 'week' | 'month';
 
@@ -25,6 +26,7 @@ const SEVERITY_LEVELS: { level: Severity; label: string; color: string }[] = [
 ];
 
 export default function HealthLogScreen() {
+  const router = useRouter();
   const { healthLogs, addHealthLog } = useHealthLogContext();
   const [showNewLog, setShowNewLog] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -151,7 +153,12 @@ export default function HealthLogScreen() {
       <LinearGradient
         colors={['#7C3AED', '#6D28D9']}
         style={styles.header}>
-        <Text style={styles.headerTitle}>Baby Health Log</Text>
+        <View style={styles.headerTop}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ChevronLeft size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Baby Health Log</Text>
+        </View>
         <View style={styles.dateControls}>
           <View style={styles.dateRangeSelector}>
             {(['day', 'week', 'month'] as DateRange[]).map((range) => (
@@ -366,12 +373,19 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  backButton: {
+    marginRight: 12,
+  },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 24,
     fontFamily: 'Inter-Bold',
-    marginBottom: 20,
-    paddingHorizontal: 20,
   },
   dateControls: {
     paddingHorizontal: 20,

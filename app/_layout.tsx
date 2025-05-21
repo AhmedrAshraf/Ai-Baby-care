@@ -21,7 +21,8 @@ import { VaccinationProvider } from '@/contexts/VaccinationContext';
 import { MedicationProvider } from '@/contexts/MedicationContext';
 import { MilestoneProvider } from '@/contexts/MilestoneContext';
 import { WhiteNoiseProvider } from '@/contexts/WhiteNoiseContext';
-import { HealthLogProvider } from '../contexts/HealthLogContext';
+import { HealthLogProvider } from '@/contexts/HealthLogContext';
+import { ReminderProvider } from '@/contexts/ReminderContext';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -46,6 +47,7 @@ export default function RootLayout() {
           <HealthLogProvider>
           <DiaperProvider>
             <WhiteNoiseProvider>
+              <ReminderProvider>
               <MilestoneProvider>
                 <VaccinationProvider>
                   <MedicationProvider>
@@ -63,6 +65,7 @@ export default function RootLayout() {
                 </MedicationProvider>
                 </VaccinationProvider>
               </MilestoneProvider>
+              </ReminderProvider>
             </WhiteNoiseProvider>
             </DiaperProvider>
           </HealthLogProvider>
