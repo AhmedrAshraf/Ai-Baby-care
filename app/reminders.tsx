@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Bell, Clock, X, Plus, Check, Repeat, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Bell, Clock, X, Plus, Check, Repeat, Trash2, Calendar } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useReminders } from '@/contexts/ReminderContext';
 import { format } from 'date-fns';
@@ -18,7 +18,8 @@ export default function RemindersScreen() {
   const [body, setBody] = useState('');
   const [time, setTime] = useState(new Date());
   const [repeat, setRepeat] = useState<'none' | 'daily' | 'weekly'>('none');
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showDateTimePicker, setShowDateTimePicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
 
   const handleAddReminder = async () => {
     if (!title.trim() || !body.trim()) return;
@@ -54,6 +55,36 @@ export default function RemindersScreen() {
     setBody('');
     setTime(new Date());
     setRepeat('none');
+  };
+
+  const handleDateTimeChange = (event: any, selectedDateTime?: Date) => {
+    setShowDateTimePicker(false);
+    if (selectedDateTime) {
+      if (Platform.OS === 'android') {
+        if (pickerMode === 'date') {
+          setTime(selectedDateTime);
+          setPickerMode('time');
+          setShowDateTimePicker(true);
+        } else {
+          const newTime = new Date(time);
+          newTime.setHours(selectedDateTime.getHours());
+          newTime.setMinutes(selectedDateTime.getMinutes());
+          setTime(newTime);
+        }
+      } else {
+        setTime(selectedDateTime);
+      }
+    }
+  };
+
+  const showDatePicker = () => {
+    setPickerMode('date');
+    setShowDateTimePicker(true);
+  };
+
+  const showTimePicker = () => {
+    setPickerMode('time');
+    setShowDateTimePicker(true);
   };
 
   return (
@@ -97,7 +128,7 @@ export default function RemindersScreen() {
                 <View style={styles.metaItem}>
                   <Clock size={16} color="#6B7280" />
                   <Text style={styles.metaText}>
-                    {format(reminder.time, 'h:mm a')}
+                    {format(reminder.time, 'MMM d, yyyy • h:mm a')}
                   </Text>
                 </View>
                 {reminder.repeat !== 'none' && (
@@ -158,30 +189,40 @@ export default function RemindersScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Time</Text>
-                <TouchableOpacity
-                  style={styles.timeButton}
-                  onPress={() => setShowTimePicker(true)}>
-                  <Clock size={20} color="#6B7280" />
-                  <Text style={styles.timeButtonText}>
-                    {format(time, 'h:mm a')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                <Text style={styles.inputLabel}>Date & Time</Text>
+                <View style={styles.dateTimeContainer}>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={showDatePicker}>
+                    <View style={styles.dateTimeContent}>
+                      <Calendar size={20} color="#6B7280" />
+                      <Text style={styles.dateTimeText}>
+                        {format(time, 'MMM d, yyyy')}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={showTimePicker}>
+                    <View style={styles.dateTimeContent}>
+                      <Clock size={20} color="#6B7280" />
+                      <Text style={styles.dateTimeText}>
+                        {format(time, 'h:mm a')}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
 
-              {showTimePicker && Platform.OS !== 'web' && (
-                <DateTimePicker
-                  value={time}
-                  mode="time"
-                  is24Hour={false}
-                  onChange={(event, selectedTime) => {
-                    setShowTimePicker(false);
-                    if (selectedTime) {
-                      setTime(selectedTime);
-                    }
-                  }}
-                />
-              )}
+                {showDateTimePicker && (
+                  <DateTimePicker
+                    value={time}
+                    mode={pickerMode}
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={handleDateTimeChange}
+                  />
+                )}
+              </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Repeat</Text>
@@ -381,15 +422,22 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
-  timeButton: {
+  dateTimeContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
+  },
+  dateTimeButton: {
+    flex: 1,
     backgroundColor: '#F3F4F6',
     padding: 16,
     borderRadius: 12,
+  },
+  dateTimeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
-  timeButtonText: {
+  dateTimeText: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#1F2937',
