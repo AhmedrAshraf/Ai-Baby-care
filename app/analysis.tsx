@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Moon, Sun, Zap, TrendingUp } from 'lucide-react-native';
+import { Moon, Sun, Zap, TrendingUp, ArrowLeft } from 'lucide-react-native';
+import { router } from 'expo-router';
 
 export default function AnalysisScreen() {
   return (
@@ -9,7 +10,12 @@ export default function AnalysisScreen() {
       <LinearGradient
         colors={['#7C3AED', '#6D28D9']}
         style={styles.header}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <ArrowLeft size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         <Text style={styles.headerTitle}>Sleep Analysis</Text>
+        </View> 
         <View style={styles.periodSelector}>
           <TouchableOpacity style={[styles.periodButton, styles.periodButtonActive]}>
             <Text style={[styles.periodText, styles.periodTextActive]}>Week</Text>
@@ -98,11 +104,17 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    marginBottom: 20,
+  },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 24,
     fontFamily: 'Inter-Bold',
-    marginBottom: 20,
+    marginLeft: 10,
   },
   periodSelector: {
     flexDirection: 'row',

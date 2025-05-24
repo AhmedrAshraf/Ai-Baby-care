@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
-import { Baby, MessageCircle, Menu, Moon, Syringe, Activity } from 'lucide-react-native';
+import { Baby, Menu, Syringe, Activity } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -20,24 +20,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="sleep"
-        options={{
-          title: 'Sleep',
-          tabBarIcon: ({ color, size }) => <Moon size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="vaccinations"
         options={{
           title: 'Health',
           tabBarIcon: ({ color, size }) => <Syringe size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="ask"
-        options={{
-          title: 'Ask AI',
-          tabBarIcon: ({ color, size }) => <MessageCircle size={size} color={color} />,
         }}
       />
       <Tabs.Screen

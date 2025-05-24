@@ -16,11 +16,17 @@ export default function ActivityHistoryScreen() {
   }, [dateRange]);
 
   const loadActivities = async () => {
-    const history = await getActivityHistory({
-      startDate: subDays(new Date(), dateRange),
-      limit: 50,
-    });
-    setActivities(history);
+    try {
+      const history = await getActivityHistory({
+        startDate: subDays(new Date(), dateRange),
+        limit: 50,
+      });
+      console.log('Loaded activities:', history); // Debug log
+      setActivities(history || []); // Ensure we always set an array
+    } catch (err) {
+      console.error('Error loading activities:', err);
+      setActivities([]);
+    }
   };
 
   const getEventIcon = (eventType: string) => {
@@ -89,6 +95,10 @@ export default function ActivityHistoryScreen() {
         {loading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading activities...</Text>
+          </View>
+        ) : activities.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>No activities found</Text>
           </View>
         ) : (
           activities.map((activity) => (

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CircleCheck as CheckCircle2, CircleAlert as AlertCircle, ChevronRight } from 'lucide-react-native';
+import { CircleCheck as CheckCircle2, CircleAlert as AlertCircle, ChevronRight, ArrowLeft } from 'lucide-react-native';
+import { router } from 'expo-router';
 
 type Milestone = {
   id: string;
@@ -53,7 +54,13 @@ export default function MilestonesScreen() {
       <LinearGradient
         colors={['#7C3AED', '#6D28D9']}
         style={styles.header}>
-        <Text style={styles.headerTitle}>Development Milestones</Text>
+        <View style={styles.headerContent}>
+          {/* back button */}
+            <TouchableOpacity onPress={() => router.back()}>
+                <ArrowLeft size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+                <Text style={styles.headerTitle}>Development Milestones</Text>
+        </View>
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>12</Text>
@@ -122,11 +129,17 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    marginBottom: 20,
+  },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 24,
     fontFamily: 'Inter-Bold',
-    marginBottom: 20,
+    marginLeft: 10,
   },
   statsContainer: {
     flexDirection: 'row',

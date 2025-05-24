@@ -28,9 +28,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const menuItems = [
   { icon: Baby, label: 'Today', route: '/(tabs)', color: '#8B5CF6' },
-  { icon: Moon, label: 'Sleep', route: '/(tabs)/sleep', color: '#EC4899' },
+  { icon: Moon, label: 'Sleep', route: '/sleep', color: '#EC4899' },
   { icon: Syringe, label: 'Health', route: '/(tabs)/vaccinations', color: '#10B981' },
-  { icon: MessageCircle, label: 'Ask AI', route: '/(tabs)/ask', color: '#6366F1' },
+  { icon: MessageCircle, label: 'Ask AI', route: '/ask', color: '#6366F1' },
   { icon: Activity, label: 'Activity History', route: '/(tabs)/activity-history', color: '#F59E0B' },
 ];
 
@@ -46,7 +46,7 @@ const quickActions = [
 ];
 
 const bottomMenuItems = [
-  { icon: Settings, label: 'Settings', route: '/settings', color: '#4B5563' },
+  { icon: Settings, label: 'Settings', route: '/more', color: '#4B5563' },
   { icon: LogOut, label: 'Logout', route: '/logout', color: '#EF4444' },
 ];
 
