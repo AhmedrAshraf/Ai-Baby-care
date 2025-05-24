@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, Platform, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircleAlert as AlertCircle, Plus, X, Camera, Thermometer, Clock, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { format, addDays, subDays, startOfWeek, endOfWeek, isSameDay, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { useHealthLogContext, HealthIssue, Severity, HealthLog } from '@/contexts/HealthLogContext';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { takePhoto, pickImage, handleWebImageUpload } from '@/utils/camera';
 
 type DateRange = 'day' | 'week' | 'month';
 
@@ -40,35 +41,20 @@ export default function HealthLogScreen() {
   const [showCustomIssueInput, setShowCustomIssueInput] = useState(false);
 
   const handleTakePhoto = async () => {
-    if (Platform.OS === 'web') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = async (e) => {
-        const file = (e.target as HTMLInputElement).files?.[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = () => {
-            setPhotoUrl(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-      input.click();
-    } else {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status === 'granted') {
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
-
-        if (!result.canceled) {
-          setPhotoUrl(result.assets[0].uri);
-        }
+    try {
+      let result;
+      if (Platform.OS === 'web') {
+        result = await handleWebImageUpload();
+      } else {
+        result = await takePhoto();
       }
+
+      if (!result.cancelled && result.uri) {
+        setPhotoUrl(result.uri);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      // You might want to show an error message to the user here
     }
   };
 
@@ -227,9 +213,11 @@ export default function HealthLogScreen() {
                 </Text>
               )}
               {log.photoUrl && (
-                <View style={styles.photoIndicator}>
-                  <Camera size={16} color="#6B7280" />
-                  <Text style={styles.photoText}>Photo attached</Text>
+                <View style={styles.photoContainer}>
+                  <Image
+                    source={{ uri: log.photoUrl }}
+                    style={styles.photo}
+                  />
                 </View>
               )}
             </View>
@@ -339,10 +327,23 @@ export default function HealthLogScreen() {
               <TouchableOpacity
                 style={styles.photoButton}
                 onPress={handleTakePhoto}>
-                <Camera size={24} color="#7C3AED" />
-                <Text style={styles.photoButtonText}>
-                  {photoUrl ? 'Change Photo' : 'Take Photo'}
-                </Text>
+                {photoUrl ? (
+                  <View style={styles.photoPreviewContainer}>
+                    <Image
+                      source={{ uri: photoUrl }}
+                      style={styles.photoPreview}
+                    />
+                    <View style={styles.photoPreviewOverlay}>
+                      <Camera size={24} color="#FFFFFF" />
+                      <Text style={styles.photoButtonText}>Change Photo</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <>
+                    <Camera size={24} color="#7C3AED" />
+                    <Text style={styles.photoButtonText}>Take Photo</Text>
+                  </>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -492,15 +493,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
   },
-  photoIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  photoContainer: {
+    marginTop: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  photoText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6B7280',
+  photo: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
   },
   addButton: {
     position: 'absolute',
@@ -622,6 +623,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 12,
     marginBottom: 24,
+    minHeight: 200,
+  },
+  photoPreviewContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+  },
+  photoPreviewOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    gap: 8,
   },
   photoButtonText: {
     fontSize: 16,

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/utils/supabase';
+import { takePhoto, pickImage, handleWebImageUpload } from '@/utils/camera';
 
 const CLOUDINARY_CLOUD_NAME = 'do0qfrr5y';
 const CLOUDINARY_UPLOAD_PRESET = 'desist';
@@ -132,46 +133,15 @@ export default function RegisterScreen() {
   };
   const handlePickImage = async () => {
     try {
+      let result;
       if (Platform.OS === 'web') {
-        // Web implementation
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = async (e) => {
-          const file = (e.target as HTMLInputElement).files?.[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              setBabyPhoto(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-          }
-        };
-        input.click();
+        result = await handleWebImageUpload();
       } else {
-        // Native implementation
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          setError('Permission to access media library was denied');
-          return;
-        }
+        result = await pickImage();
+      }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.images,
-          allowsEditing: true,
-          aspect: [1, 1],
-          quality: 0.8,
-          base64: true,
-        });
-
-        if (!result.canceled) {
-          // Store both URI and base64 data
-          setBabyPhoto(result.assets[0].uri);
-          // Store base64 data in a separate state if needed
-          if (result.assets[0].base64) {
-            console.log('Base64 data available');
-          }
-        }
+      if (!result.cancelled && result.uri) {
+        setBabyPhoto(result.uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);

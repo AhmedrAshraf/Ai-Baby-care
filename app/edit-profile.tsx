@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/utils/supabase';
 import { useActivityLog } from '@/contexts/ActivityLogContext';
+import { takePhoto, pickImage, handleWebImageUpload } from '@/utils/camera';
 
 const CLOUDINARY_CLOUD_NAME = 'do0qfrr5y';
 const CLOUDINARY_UPLOAD_PRESET = 'desist';
@@ -65,35 +66,15 @@ export default function EditProfileScreen() {
 
   const handlePickImage = async () => {
     try {
+      let result;
       if (Platform.OS === 'web') {
-        // Web implementation
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = async (e) => {
-          const file = (e.target as HTMLInputElement).files?.[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              setProfileImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-          }
-        };
-        input.click();
+        result = await handleWebImageUpload();
       } else {
-        // Native implementation
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.images,
-          allowsEditing: true,
-          aspect: [1, 1],
-          quality: 0.8,
-          base64: true,
-        });
+        result = await pickImage();
+      }
 
-        if (!result.canceled) {
-          setProfileImage(result.assets[0].uri);
-        }
+      if (!result.cancelled && result.uri) {
+        setProfileImage(result.uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);
