@@ -184,7 +184,7 @@ export default function TodayScreen() {
             type="ask"
             icon={<MessageCircle size={24} color="#FFFFFF" />}
             title="Ask AI"
-            onPress={() => router.push('/(tabs)/ask')}
+            onPress={() => router.push('/ask')}
             color="#7C3AED"
           />
 

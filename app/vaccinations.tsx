@@ -1,84 +1,67 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Modal, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Plus, Syringe, X, Calendar, Clock, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { Syringe, X, Plus, Calendar, Clock, CircleAlert as AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { format, addDays, subDays, startOfWeek, endOfWeek, isSameDay, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { useVaccinationContext } from '@/contexts/VaccinationContext';
+import { useMedicationContext } from '@/contexts/MedicationContext';
+import Header from '@/components/Header';
 
-type Vaccination = {
-  id: string;
-  name: string;
-  date: Date;
-  nextDose?: Date;
-  notes?: string;
-};
+type DateRange = 'day' | 'week' | 'month';
 
-type Medication = {
-  id: string;
-  name: string;
-  dosage: string;
-  frequency: string;
-  startDate: Date;
-  endDate?: Date;
-  notes?: string;
-};
+const VACCINATIONS = [
+  'DTaP (Diphtheria, Tetanus, Pertussis)',
+  'IPV (Polio)',
+  'MMR (Measles, Mumps, Rubella)',
+  'Hib (Haemophilus influenzae type b)',
+  'Hepatitis B',
+  'Varicella (Chickenpox)',
+  'PCV13 (Pneumococcal)',
+  'Rotavirus',
+  'Influenza',
+  'Other',
+];
+
+const MEDICATIONS = [
+  'Acetaminophen (Tylenol)',
+  'Ibuprofen',
+  'Vitamin D Drops',
+  'Iron Supplement',
+  'Multivitamin',
+  'Probiotic',
+  'Other',
+];
 
 export default function VaccinationsScreen() {
   const router = useRouter();
-  const [showNewVaccination, setShowNewVaccination] = useState(false);
-  const [showNewMedication, setShowNewMedication] = useState(false);
-  const [activeTab, setActiveTab] = useState<'vaccinations' | 'medications'>('vaccinations');
+  const { vaccinations, addVaccination } = useVaccinationContext();
+  const { medications, addMedication } = useMedicationContext();
+  const [showNewItem, setShowNewItem] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [dateRange, setDateRange] = useState<'day' | 'week' | 'month'>('day');
-  
-  const [vaccinations, setVaccinations] = useState<Vaccination[]>([
-    {
-      id: '1',
-      name: 'DTaP',
-      date: new Date(2024, 0, 15),
-      nextDose: new Date(2024, 3, 15),
-      notes: 'First dose completed',
-    },
-    {
-      id: '2',
-      name: 'Hepatitis B',
-      date: new Date(2024, 0, 1),
-      nextDose: new Date(2024, 3, 1),
-      notes: 'No adverse reactions',
-    },
-  ]);
+  const [dateRange, setDateRange] = useState<DateRange>('day');
+  const [activeTab, setActiveTab] = useState<'vaccinations' | 'medications'>('vaccinations');
+  const [showVaccinationDropdown, setShowVaccinationDropdown] = useState(false);
+  const [showMedicationDropdown, setShowMedicationDropdown] = useState(false);
+  const [selectedVaccination, setSelectedVaccination] = useState('');
+  const [selectedMedication, setSelectedMedication] = useState('');
+  const [customItem, setCustomItem] = useState('');
+  const [dosage, setDosage] = useState('');
+  const [frequency, setFrequency] = useState('');
+  const [notes, setNotes] = useState('');
 
-  const [medications, setMedications] = useState<Medication[]>([
-    {
-      id: '1',
-      name: 'Vitamin D Drops',
-      dosage: '400 IU',
-      frequency: 'Once daily',
-      startDate: new Date(2024, 0, 1),
-      notes: 'Give with feeding',
-    },
-    {
-      id: '2',
-      name: 'Iron Supplement',
-      dosage: '10mg',
-      frequency: 'Twice daily',
-      startDate: new Date(2024, 0, 15),
-      endDate: new Date(2024, 1, 15),
-      notes: 'After meals',
-    },
-  ]);
-
-  const [newVaccination, setNewVaccination] = useState({
-    name: '',
-    notes: '',
-  });
-
-  const [newMedication, setNewMedication] = useState({
-    name: '',
-    dosage: '',
-    frequency: '',
-    notes: '',
-  });
+  const navigateDate = (direction: 'prev' | 'next') => {
+    setSelectedDate(current => {
+      switch (dateRange) {
+        case 'day':
+          return direction === 'prev' ? subDays(current, 1) : addDays(current, 1);
+        case 'week':
+          return direction === 'prev' ? subDays(current, 7) : addDays(current, 7);
+        case 'month':
+          return direction === 'prev' ? subMonths(current, 1) : addMonths(current, 1);
+      }
+    });
+  };
 
   const getDateRangeText = () => {
     const weekStart = startOfWeek(selectedDate);
@@ -96,246 +79,310 @@ export default function VaccinationsScreen() {
     }
   };
 
-  const handleAddVaccination = () => {
-    if (newVaccination.name.trim()) {
-      const vaccination: Vaccination = {
+  const getFilteredItems = () => {
+    const items = activeTab === 'vaccinations' ? vaccinations : medications;
+    return items.filter(item => {
+      const itemDate = activeTab === 'vaccinations' 
+        ? (item as typeof vaccinations[0]).date 
+        : (item as typeof medications[0]).startDate;
+
+      switch (dateRange) {
+        case 'day':
+          return isSameDay(itemDate, selectedDate);
+        case 'week': {
+          const start = startOfWeek(selectedDate);
+          const end = endOfWeek(selectedDate);
+          return itemDate >= start && itemDate <= end;
+        }
+        case 'month': {
+          const start = startOfMonth(selectedDate);
+          const end = endOfMonth(selectedDate);
+          return itemDate >= start && itemDate <= end;
+        }
+      }
+    });
+  };
+
+  const handleAddItem = () => {
+    if (activeTab === 'vaccinations' && selectedVaccination) {
+      const name = selectedVaccination === 'Other' ? customItem : selectedVaccination;
+      addVaccination({
         id: Date.now().toString(),
-        name: newVaccination.name,
+        name,
         date: new Date(),
-        notes: newVaccination.notes,
-      };
-      setVaccinations(prev => [vaccination, ...prev]);
-      setNewVaccination({ name: '', notes: '' });
-      setShowNewVaccination(false);
+        notes,
+      });
+      setSelectedVaccination('');
+      setCustomItem('');
+      setNotes('');
+      setShowNewItem(false);
+      setShowVaccinationDropdown(false);
+    } else if (activeTab === 'medications' && selectedMedication) {
+      const name = selectedMedication === 'Other' ? customItem : selectedMedication;
+      addMedication({
+        id: Date.now().toString(),
+        name,
+        dosage,
+        frequency,
+        startDate: new Date(),
+        notes,
+      });
+      setSelectedMedication('');
+      setCustomItem('');
+      setDosage('');
+      setFrequency('');
+      setNotes('');
+      setShowNewItem(false);
+      setShowMedicationDropdown(false);
     }
   };
 
-  const handleAddMedication = () => {
-    if (newMedication.name.trim() && newMedication.dosage.trim() && newMedication.frequency.trim()) {
-      const medication: Medication = {
-        id: Date.now().toString(),
-        name: newMedication.name,
-        dosage: newMedication.dosage,
-        frequency: newMedication.frequency,
-        startDate: new Date(),
-        notes: newMedication.notes,
-      };
-      setMedications(prev => [medication, ...prev]);
-      setNewMedication({ name: '', dosage: '', frequency: '', notes: '' });
-      setShowNewMedication(false);
-    }
+  const resetForm = () => {
+    setSelectedVaccination('');
+    setSelectedMedication('');
+    setCustomItem('');
+    setDosage('');
+    setFrequency('');
+    setNotes('');
+    setShowVaccinationDropdown(false);
+    setShowMedicationDropdown(false);
   };
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#7C3AED', '#6D28D9']}
-        style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Health Records</Text>
-        </View>
+      <Header
+        title="Health Records"
+        useGradient
+        bottomElement={
+          <>
+            <View style={styles.dateControls}>
+              <View style={styles.dateRangeSelector}>
+                {(['day', 'week', 'month'] as DateRange[]).map((range) => (
+                  <TouchableOpacity
+                    key={range}
+                    style={[styles.dateRangeButton, dateRange === range && styles.dateRangeButtonActive]}
+                    onPress={() => setDateRange(range)}>
+                    <Text style={[styles.dateRangeText, dateRange === range && styles.dateRangeTextActive]}>
+                      {range.charAt(0).toUpperCase() + range.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.dateNavigator}>
+                <TouchableOpacity onPress={() => navigateDate('prev')}>
+                  <ChevronLeft size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+                <Text style={styles.dateRangeLabel}>{getDateRangeText()}</Text>
+                <TouchableOpacity onPress={() => navigateDate('next')}>
+                  <ChevronRight size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
 
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'vaccinations' && styles.activeTab]}
-            onPress={() => setActiveTab('vaccinations')}>
-            <Syringe size={20} color={activeTab === 'vaccinations' ? '#7C3AED' : '#FFFFFF'} />
-            <Text style={[styles.tabText, activeTab === 'vaccinations' && styles.activeTabText]}>
-              Vaccinations
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'medications' && styles.activeTab]}
-            onPress={() => setActiveTab('medications')}>
-            <AlertCircle size={20} color={activeTab === 'medications' ? '#7C3AED' : '#FFFFFF'} />
-            <Text style={[styles.tabText, activeTab === 'medications' && styles.activeTabText]}>
-              Medications
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+            <View style={styles.tabsContainer}>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'vaccinations' && styles.activeTab]}
+                onPress={() => setActiveTab('vaccinations')}>
+                <Syringe size={20} color={activeTab === 'vaccinations' ? '#7C3AED' : '#FFFFFF'} />
+                <Text style={[styles.tabText, activeTab === 'vaccinations' && styles.activeTabText]}>
+                  Vaccinations
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'medications' && styles.activeTab]}
+                onPress={() => setActiveTab('medications')}>
+                <AlertCircle size={20} color={activeTab === 'medications' ? '#7C3AED' : '#FFFFFF'} />
+                <Text style={[styles.tabText, activeTab === 'medications' && styles.activeTabText]}>
+                  Medications
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        }
+      />
 
       <ScrollView style={styles.content}>
-        {activeTab === 'vaccinations' ? (
-          <View>
-            {vaccinations.map(vaccination => (
-              <View key={vaccination.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Syringe size={20} color="#7C3AED" />
-                  <Text style={styles.cardTitle}>{vaccination.name}</Text>
-                </View>
-                <View style={styles.cardContent}>
-                  <View style={styles.dateRow}>
-                    <Calendar size={16} color="#6B7280" />
-                    <Text style={styles.dateText}>
-                      Administered: {format(vaccination.date, 'MMM d, yyyy')}
-                    </Text>
-                  </View>
-                  {vaccination.nextDose && (
-                    <View style={styles.dateRow}>
-                      <Clock size={16} color="#6B7280" />
-                      <Text style={styles.dateText}>
-                        Next dose: {format(vaccination.nextDose, 'MMM d, yyyy')}
-                      </Text>
-                    </View>
+        {getFilteredItems().map(item => (
+          <View key={item.id} style={styles.card}>
+            <View style={styles.cardHeader}>
+              {activeTab === 'vaccinations' ? (
+                <Syringe size={20} color="#7C3AED" />
+              ) : (
+                <AlertCircle size={20} color="#7C3AED" />
+              )}
+              <Text style={styles.cardTitle}>{item.name}</Text>
+            </View>
+            <View style={styles.cardContent}>
+              <View style={styles.dateRow}>
+                <Calendar size={16} color="#6B7280" />
+                <Text style={styles.dateText}>
+                  {format(
+                    activeTab === 'vaccinations' 
+                      ? (item as typeof vaccinations[0]).date 
+                      : (item as typeof medications[0]).startDate,
+                    'MMM d, yyyy'
                   )}
-                  {vaccination.notes && (
-                    <Text style={styles.notes}>{vaccination.notes}</Text>
-                  )}
-                </View>
+                </Text>
               </View>
-            ))}
-          </View>
-        ) : (
-          <View>
-            {medications.map(medication => (
-              <View key={medication.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <AlertCircle size={20} color="#7C3AED" />
-                  <Text style={styles.cardTitle}>{medication.name}</Text>
+              {activeTab === 'medications' && (
+                <View style={styles.medicationDetails}>
+                  <Text style={styles.dosageText}>
+                    Dosage: {(item as typeof medications[0]).dosage}
+                  </Text>
+                  <Text style={styles.frequencyText}>
+                    {(item as typeof medications[0]).frequency}
+                  </Text>
                 </View>
-                <View style={styles.cardContent}>
-                  <View style={styles.medicationDetails}>
-                    <Text style={styles.dosageText}>
-                      Dosage: {medication.dosage}
-                    </Text>
-                    <Text style={styles.frequencyText}>
-                      {medication.frequency}
-                    </Text>
-                  </View>
-                  <View style={styles.dateRow}>
-                    <Calendar size={16} color="#6B7280" />
-                    <Text style={styles.dateText}>
-                      Started: {format(medication.startDate, 'MMM d, yyyy')}
-                    </Text>
-                  </View>
-                  {medication.endDate && (
-                    <View style={styles.dateRow}>
-                      <Clock size={16} color="#6B7280" />
-                      <Text style={styles.dateText}>
-                        Ended: {format(medication.endDate, 'MMM d, yyyy')}
-                      </Text>
-                    </View>
-                  )}
-                  {medication.notes && (
-                    <Text style={styles.notes}>{medication.notes}</Text>
-                  )}
-                </View>
-              </View>
-            ))}
+              )}
+              {item.notes && (
+                <Text style={styles.notes}>{item.notes}</Text>
+              )}
+            </View>
           </View>
-        )}
+        ))}
       </ScrollView>
 
       <TouchableOpacity
         style={styles.addButton}
-        onPress={() => activeTab === 'vaccinations' ? setShowNewVaccination(true) : setShowNewMedication(true)}>
+        onPress={() => setShowNewItem(true)}>
         <Plus size={24} color="#FFFFFF" />
       </TouchableOpacity>
 
       <Modal
-        visible={showNewVaccination}
+        visible={showNewItem}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowNewVaccination(false)}>
+        onRequestClose={() => setShowNewItem(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Vaccination</Text>
-              <TouchableOpacity onPress={() => setShowNewVaccination(false)}>
+              <Text style={styles.modalTitle}>
+                Add {activeTab === 'vaccinations' ? 'Vaccination' : 'Medication'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowNewItem(false)}>
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Vaccination Name</Text>
-              <TextInput
-                style={styles.input}
-                value={newVaccination.name}
-                onChangeText={text => setNewVaccination(prev => ({ ...prev, name: text }))}
-                placeholder="Enter vaccination name"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={newVaccination.notes}
-                onChangeText={text => setNewVaccination(prev => ({ ...prev, notes: text }))}
-                placeholder="Add any notes or reactions"
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleAddVaccination}>
-              <Text style={styles.submitButtonText}>Add Vaccination</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
-      <Modal
-        visible={showNewMedication}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowNewMedication(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Medication</Text>
-              <TouchableOpacity onPress={() => setShowNewMedication(false)}>
-                <X size={24} color="#6B7280" />
+            <ScrollView style={styles.modalScroll}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  Select {activeTab === 'vaccinations' ? 'Vaccination' : 'Medication'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.dropdown}
+                  onPress={() => {
+                    if (activeTab === 'vaccinations') {
+                      setShowVaccinationDropdown(!showVaccinationDropdown);
+                      setShowMedicationDropdown(false);
+                    } else {
+                      setShowMedicationDropdown(!showMedicationDropdown);
+                      setShowVaccinationDropdown(false);
+                    }
+                  }}>
+                  <Text style={styles.dropdownText}>
+                    {activeTab === 'vaccinations' 
+                      ? (selectedVaccination || 'Select Vaccination')
+                      : (selectedMedication || 'Select Medication')}
+                  </Text>
+                  <ChevronRight size={20} color="#6B7280" />
+                </TouchableOpacity>
+
+                {showVaccinationDropdown && (
+                  <View style={styles.dropdownOptions}>
+                    {VACCINATIONS.map(vaccine => (
+                      <TouchableOpacity
+                        key={vaccine}
+                        style={styles.dropdownOption}
+                        onPress={() => {
+                          setSelectedVaccination(vaccine);
+                          setShowVaccinationDropdown(false);
+                        }}>
+                        <Text style={styles.dropdownOptionText}>{vaccine}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
+                {showMedicationDropdown && (
+                  <View style={styles.dropdownOptions}>
+                    {MEDICATIONS.map(med => (
+                      <TouchableOpacity
+                        key={med}
+                        style={styles.dropdownOption}
+                        onPress={() => {
+                          setSelectedMedication(med);
+                          setShowMedicationDropdown(false);
+                        }}>
+                        <Text style={styles.dropdownOptionText}>{med}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {((activeTab === 'vaccinations' && selectedVaccination === 'Other') ||
+                (activeTab === 'medications' && selectedMedication === 'Other')) && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>
+                    Specify {activeTab === 'vaccinations' ? 'Vaccination' : 'Medication'}
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={customItem}
+                    onChangeText={setCustomItem}
+                    placeholder={`Enter ${activeTab === 'vaccinations' ? 'vaccination' : 'medication'} name`}
+                  />
+                </View>
+              )}
+
+              {activeTab === 'medications' && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Dosage</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={dosage}
+                      onChangeText={setDosage}
+                      placeholder="Enter dosage (e.g., 5ml, 10mg)"
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Frequency</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={frequency}
+                      onChangeText={setFrequency}
+                      placeholder="Enter frequency (e.g., twice daily)"
+                    />
+                  </View>
+                </>
+              )}
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Notes (Optional)</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="Add any notes or reactions"
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  (!selectedVaccination && !selectedMedication) && styles.saveButtonDisabled
+                ]}
+                onPress={handleAddItem}
+                disabled={!selectedVaccination && !selectedMedication}>
+                <Text style={styles.saveButtonText}>
+                  Add {activeTab === 'vaccinations' ? 'Vaccination' : 'Medication'}
+                </Text>
               </TouchableOpacity>
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Medication Name</Text>
-              <TextInput
-                style={styles.input}
-                value={newMedication.name}
-                onChangeText={text => setNewMedication(prev => ({ ...prev, name: text }))}
-                placeholder="Enter medication name"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Dosage</Text>
-              <TextInput
-                style={styles.input}
-                value={newMedication.dosage}
-                onChangeText={text => setNewMedication(prev => ({ ...prev, dosage: text }))}
-                placeholder="Enter dosage (e.g., 5ml, 10mg)"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Frequency</Text>
-              <TextInput
-                style={styles.input}
-                value={newMedication.frequency}
-                onChangeText={text => setNewMedication(prev => ({ ...prev, frequency: text }))}
-                placeholder="Enter frequency (e.g., twice daily)"
-              />
-            </View>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                value={newMedication.notes}
-                onChangeText={text => setNewMedication(prev => ({ ...prev, notes: text }))}
-                placeholder="Add any notes or instructions"
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleAddMedication}>
-              <Text style={styles.submitButtonText}>Add Medication</Text>
-            </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -354,24 +401,55 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  backButton: {
-    marginRight: 16,
-  },
   headerTitle: {
     color: '#FFFFFF',
     fontSize: 24,
     fontFamily: 'Inter-Bold',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  dateControls: {
+    paddingHorizontal: 20,
+  },
+  dateRangeSelector: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+  },
+  dateRangeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  dateRangeButtonActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  dateRangeText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+  },
+  dateRangeTextActive: {
+    color: '#7C3AED',
+  },
+  dateNavigator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateRangeLabel: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
   },
   tabsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     gap: 8,
+    marginTop: 20,
   },
   tab: {
     flex: 1,
@@ -434,13 +512,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
   },
-  notes: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6B7280',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
   medicationDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -456,6 +527,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
+  },
+  notes: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginTop: 8,
   },
   addButton: {
     position: 'absolute',
@@ -482,19 +560,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 24,
-    maxHeight: '80%',
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   modalTitle: {
     fontSize: 20,
     fontFamily: 'Inter-Bold',
     color: '#1F2937',
+  },
+  modalScroll: {
+    padding: 24,
   },
   inputGroup: {
     marginBottom: 16,
@@ -505,26 +587,62 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginBottom: 8,
   },
+  dropdown: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 16,
+  },
+  dropdownText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#1F2937',
+  },
+  dropdownOptions: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  dropdownOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  dropdownOptionText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#1F2937',
+  },
   input: {
     backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#1F2937',
   },
   textArea: {
-    height: 100,
+    height: 120,
     textAlignVertical: 'top',
   },
-  submitButton: {
+  saveButton: {
     backgroundColor: '#7C3AED',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 24,
   },
-  submitButtonText: {
+  saveButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  saveButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',

@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
-import { Baby, Menu, Syringe, Activity } from 'lucide-react-native';
+import { Baby, Menu, Syringe, Activity, Zap, Track, ChartLine } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -20,19 +20,26 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="vaccinations"
+        name="analysis"
         options={{
-          title: 'Health',
-          tabBarIcon: ({ color, size }) => <Syringe size={size} color={color} />,
+          title: 'Analysis',
+          tabBarIcon: ({ color, size }) => <Zap size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
+        name="tracking"
+        options={{
+          title: 'Tracking',
+          tabBarIcon: ({ color, size }) => <ChartLine size={size} color={color} />,
+        }}
+      /> */}
+      {/* <Tabs.Screen
         name="activity-history"
         options={{
           title: 'Activity',
           tabBarIcon: ({ color, size }) => <Activity size={size} color={color} />,
         }}
-      />
+      /> */}
       <Tabs.Screen
         name="more"
         options={{
