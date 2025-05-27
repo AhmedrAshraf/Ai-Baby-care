@@ -1,6 +1,7 @@
 import React from 'react';
 import { Stack } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ActivityLogProvider } from '@/contexts/ActivityLogContext';
@@ -34,9 +35,11 @@ export default function RootLayout() {
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#7C3AED" />
-      </View>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#7C3AED" />
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -54,7 +57,7 @@ export default function RootLayout() {
                   <QuickActionsProvider>
                     <FeedingProvider>
                       <SleepProvider>
-                        <View style={{ flex: 1 }}>
+                        <View style={{ flex: 1, paddingBottom: 22, backgroundColor: '#fff'}}>
                           <StatusBar style="dark" />
                           <Stack screenOptions={{ headerShown: false }} />
                           <Sidebar />

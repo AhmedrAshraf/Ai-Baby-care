@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
-import { Baby, Menu, Syringe, Activity, Zap, Track, ChartLine } from 'lucide-react-native';
+import { Baby, Menu, Zap } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -10,7 +10,7 @@ export default function TabLayout() {
         tabBarStyle: styles.tabBar,
         tabBarActiveTintColor: '#7C3AED',
         tabBarInactiveTintColor: '#6B7280',
-        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarLabelStyle: styles.tabBarLabel
       }}>
       <Tabs.Screen
         name="index"

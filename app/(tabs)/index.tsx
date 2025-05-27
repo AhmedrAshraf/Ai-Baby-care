@@ -160,7 +160,7 @@ export default function TodayScreen() {
             type="vaccinations"
             icon={<Syringe size={24} color="#FFFFFF" />}
             title="Vaccinations"
-            onPress={() => router.push('/(tabs)/vaccinations')}
+            onPress={() => router.push('/vaccinations')}
             color="#F59E0B"
           />
 
