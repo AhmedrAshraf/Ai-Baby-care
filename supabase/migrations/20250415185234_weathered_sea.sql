@@ -23,6 +23,7 @@ DROP TABLE IF EXISTS sleep_records CASCADE;
 DROP TABLE IF EXISTS growth_measurements CASCADE;
 DROP TABLE IF EXISTS user_profiles CASCADE;
 DROP TABLE IF EXISTS conversations CASCADE;
+DROP TABLE IF EXISTS feeding_sessions CASCADE;
 
 -- Drop existing types
 DROP TYPE IF EXISTS activity_type CASCADE;
@@ -189,6 +190,23 @@ CREATE TABLE IF NOT EXISTS conversations (
   created_at timestamptz DEFAULT now()
 );
 
+-- Create feeding_sessions table
+CREATE TABLE IF NOT EXISTS feeding_sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  type text NOT NULL CHECK (type IN ('breast', 'bottle', 'solid')),
+  start_time timestamptz NOT NULL DEFAULT now(),
+  end_time timestamptz,
+  duration integer,
+  amount numeric,
+  unit text CHECK (unit IN ('ml', 'oz')),
+  side text CHECK (side IN ('left', 'right', 'both')),
+  food_type text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS pediatricians_user_id_idx ON pediatricians(user_id);
 CREATE INDEX IF NOT EXISTS appointments_user_id_date_idx ON appointments(user_id, date);
@@ -216,6 +234,7 @@ ALTER TABLE activity_measurements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sleep_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE growth_measurements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feeding_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies
 DO $$ BEGIN
@@ -358,6 +377,24 @@ DO $$ BEGIN
 
   CREATE POLICY "Users can read own conversations"
     ON conversations FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
+
+  -- Feeding Sessions
+  CREATE POLICY "Users can view their own feeding sessions"
+    ON feeding_sessions FOR SELECT
+    USING (auth.uid() = user_id);
+
+  CREATE POLICY "Users can insert their own feeding sessions"
+    ON feeding_sessions FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+  CREATE POLICY "Users can update their own feeding sessions"
+    ON feeding_sessions FOR UPDATE
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+  CREATE POLICY "Users can delete their own feeding sessions"
+    ON feeding_sessions FOR DELETE
     USING (auth.uid() = user_id);
 
 EXCEPTION
