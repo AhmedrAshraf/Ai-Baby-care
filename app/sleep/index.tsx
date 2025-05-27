@@ -9,6 +9,7 @@ import {
   Platform,
   useWindowDimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -93,6 +94,55 @@ export default function SleepScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [sessions, setSessions] = useState<SleepSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingActiveSession, setIsCheckingActiveSession] = useState(true);
+
+  // Check for active session when component mounts
+  useEffect(() => {
+    const checkActiveSession = async () => {
+      try {
+        setIsCheckingActiveSession(true);
+        if (!user) {
+          setIsCheckingActiveSession(false);
+          return;
+        }
+
+        const { data: activeSession, error } = await supabase
+          .from('sleep_records')
+          .select('*')
+          .eq('user_id', user.id)
+          .is('end_time', null)
+          .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw error;
+        }
+
+        if (activeSession) {
+          setCurrentSession({
+            ...activeSession,
+            start_time: new Date(activeSession.start_time),
+            end_time: activeSession.end_time ? new Date(activeSession.end_time) : undefined,
+          });
+          setIsTracking(true);
+          
+          // Calculate initial elapsed time
+          const startTime = new Date(activeSession.start_time);
+          const now = new Date();
+          const diffInSeconds = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+          const hours = Math.floor(diffInSeconds / 3600);
+          const minutes = Math.floor((diffInSeconds % 3600) / 60);
+          const seconds = diffInSeconds % 60;
+          setElapsedTime({ hours, minutes, seconds });
+        }
+      } catch (error) {
+        console.error('Error checking active session:', error);
+      } finally {
+        setIsCheckingActiveSession(false);
+      }
+    };
+
+    checkActiveSession();
+  }, [user]);
 
   // Load sleep sessions
   const loadSleepSessions = async () => {
@@ -172,6 +222,26 @@ export default function SleepScreen() {
         return;
       }
 
+      // Check if there's already an active session
+      const { data: activeSession, error: activeError } = await supabase
+        .from('sleep_records')
+        .select('*')
+        .eq('user_id', user.id)
+        .is('end_time', null)
+        .single();
+
+      if (activeError && activeError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        throw activeError;
+      }
+
+      if (activeSession) {
+        Alert.alert(
+          'Active Session',
+          'You already have an active sleep session. Please stop the current session before starting a new one.'
+        );
+        return;
+      }
+
       const newSession: SleepSession = {
         type,
         start_time: new Date(),
@@ -179,7 +249,7 @@ export default function SleepScreen() {
       };
 
       const { data, error } = await supabase
-        .from('sleep_sessions')
+        .from('sleep_records')
         .insert([
           {
             type: newSession.type,
@@ -229,8 +299,7 @@ export default function SleepScreen() {
       );
 
       // Validate duration
-      if (durationInMinutes > 1440) {
-        // 24 hours in minutes
+      if (durationInMinutes > 1440) { // 24 hours in minutes
         Alert.alert(
           'Invalid Duration',
           'Sleep duration cannot exceed 24 hours. Please check your device time settings.'
@@ -238,35 +307,51 @@ export default function SleepScreen() {
         return;
       }
 
-      console.log('Updating session with:', {
-        id: currentSession.id,
-        end_time: end_time.toISOString(),
-        duration: durationInMinutes,
-      });
+      // Show confirmation dialog
+      Alert.alert(
+        'Stop Sleep Session',
+        'Are you sure you want to stop tracking this sleep session?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Stop',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const { error } = await supabase
+                  .from('sleep_records')
+                  .update({
+                    end_time: end_time.toISOString(),
+                    duration: durationInMinutes,
+                  })
+                  .eq('id', currentSession.id);
 
-      const { error } = await supabase
-        .from('sleep_sessions')
-        .update({
-          end_time: end_time.toISOString(),
-          duration: durationInMinutes,
-        })
-        .eq('id', currentSession.id);
+                if (error) {
+                  console.error('Supabase error:', error);
+                  throw error;
+                }
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
+                const completedSession: SleepSession = {
+                  ...currentSession,
+                  end_time,
+                  duration: durationInMinutes,
+                };
 
-      const completedSession: SleepSession = {
-        ...currentSession,
-        end_time,
-        duration: durationInMinutes,
-      };
-
-      setSessions((prev) => [completedSession, ...prev]);
-      setCurrentSession(null);
-      setIsTracking(false);
-      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+                setSessions((prev) => [completedSession, ...prev]);
+                setCurrentSession(null);
+                setIsTracking(false);
+                setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+              } catch (error) {
+                console.error('Error stopping sleep session:', error);
+                Alert.alert('Error', 'Failed to stop sleep session. Please try again.');
+              }
+            },
+          },
+        ]
+      );
     } catch (error) {
       console.error('Error stopping sleep session:', error);
       Alert.alert('Error', 'Failed to stop sleep session. Please try again.');
@@ -379,147 +464,156 @@ export default function SleepScreen() {
       />
 
       <ScrollView style={styles.content}>
-        {isTracking && currentSession && (
-          <View style={styles.timerCard}>
-            <View style={styles.timerHeader}>
-              <Timer size={24} color="#7C3AED" />
-              <Text style={styles.timerTitle}>
-                {currentSession.type === 'nap' ? 'Nap' : 'Night Sleep'} in
-                Progress
-              </Text>
-            </View>
-            <Text style={styles.timerDisplay}>{formatTime(elapsedTime)}</Text>
-            <Text style={styles.timerSubtext}>
-              Started at {format(currentSession.start_time, 'hh:mm a')}
-            </Text>
+        {isCheckingActiveSession ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#7C3AED" />
+            <Text style={styles.loadingText}>Checking active sessions...</Text>
           </View>
-        )}
+        ) : (
+          <>
+            {isTracking && currentSession && (
+              <View style={styles.timerCard}>
+                <View style={styles.timerHeader}>
+                  <Timer size={24} color="#7C3AED" />
+                  <Text style={styles.timerTitle}>
+                    {currentSession.type === 'nap' ? 'Nap' : 'Night Sleep'} in
+                    Progress
+                  </Text>
+                </View>
+                <Text style={styles.timerDisplay}>{formatTime(elapsedTime)}</Text>
+                <Text style={styles.timerSubtext}>
+                  Started at {format(currentSession.start_time, 'hh:mm a')}
+                </Text>
+              </View>
+            )}
 
-        <View style={styles.section}>
-          <View style={styles.calendarHeader}>
-            <TouchableOpacity onPress={() => navigateWeek('prev')}>
-              <ChevronLeft size={24} color="#6B7280" />
-            </TouchableOpacity>
-            <Text style={styles.calendarTitle}>
-              {format(weekDays[0], 'MMM d')} -{' '}
-              {format(weekDays[6], 'MMM d, yyyy')}
-            </Text>
-            <TouchableOpacity onPress={() => navigateWeek('next')}>
-              <ChevronRight size={24} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.weekContainer}>
-            {weekDays.map((day, index) => {
-              const stats = calculateDailyStats(day);
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    dayColumnStyle,
-                    isSameDay(day, selectedDate) && styles.selectedDay,
-                  ]}
-                  onPress={() => setSelectedDate(day)}
-                >
-                  <Text style={styles.dayName}>{format(day, 'EEE')}</Text>
-                  <Text style={styles.dayNumber}>{format(day, 'd')}</Text>
-                  <View
-                    style={[
-                      styles.sleepIndicator,
-                      { backgroundColor: getQualityColor(stats.quality) },
-                    ]}
-                  >
-                    <Text style={styles.sleepHours}>
-                      {Math.floor(stats.totalSleep / 60)}h
-                    </Text>
-                  </View>
+            <View style={styles.section}>
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity onPress={() => navigateWeek('prev')}>
+                  <ChevronLeft size={24} color="#6B7280" />
                 </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily Summary</Text>
-          <View style={styles.summaryCard}>
-            {(() => {
-              const stats = calculateDailyStats(selectedDate);
-              return (
-                <>
-                  <View style={styles.summaryRow}>
-                    <View style={styles.summaryItem}>
-                      <Moon size={20} color="#7C3AED" />
-                      <Text style={styles.summaryLabel}>Night Sleep</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatDuration(stats.nightSleep)}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryItem}>
-                      <Sun size={20} color="#F59E0B" />
-                      <Text style={styles.summaryLabel}>Naps</Text>
-                      <Text style={styles.summaryValue}>{stats.naps}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <View style={styles.summaryItem}>
-                      <Clock size={20} color="#3B82F6" />
-                      <Text style={styles.summaryLabel}>Total Sleep</Text>
-                      <Text style={styles.summaryValue}>
-                        {formatDuration(stats.totalSleep)}
-                      </Text>
-                    </View>
-                    <View style={styles.summaryItem}>
-                      <LineChart size={20} color="#10B981" />
-                      <Text style={styles.summaryLabel}>Quality</Text>
-                      <Text
+                <Text style={styles.calendarTitle}>
+                  {format(weekDays[0], 'MMM d')} -{' '}
+                  {format(weekDays[6], 'MMM d, yyyy')}
+                </Text>
+                <TouchableOpacity onPress={() => navigateWeek('next')}>
+                  <ChevronRight size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.weekContainer}>
+                {weekDays.map((day, index) => {
+                  const stats = calculateDailyStats(day);
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        dayColumnStyle,
+                        isSameDay(day, selectedDate) && styles.selectedDay,
+                      ]}
+                      onPress={() => setSelectedDate(day)}
+                    >
+                      <Text style={styles.dayName}>{format(day, 'EEE')}</Text>
+                      <Text style={styles.dayNumber}>{format(day, 'd')}</Text>
+                      <View
                         style={[
-                          styles.summaryValue,
-                          { color: getQualityColor(stats.quality) },
+                          styles.sleepIndicator,
+                          { backgroundColor: getQualityColor(stats.quality) },
                         ]}
                       >
-                        {stats.quality.charAt(0).toUpperCase() +
-                          stats.quality.slice(1)}
+                        <Text style={styles.sleepHours}>
+                          {Math.floor(stats.totalSleep / 60)}h
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Daily Summary</Text>
+              <View style={styles.summaryCard}>
+                {(() => {
+                  const stats = calculateDailyStats(selectedDate);
+                  return (
+                    <>
+                      <View style={styles.summaryRow}>
+                        <View style={styles.summaryItem}>
+                          <Moon size={20} color="#7C3AED" />
+                          <Text style={styles.summaryLabel}>Night Sleep</Text>
+                          <Text style={styles.summaryValue}>
+                            {formatDuration(stats.nightSleep)}
+                          </Text>
+                        </View>
+                        <View style={styles.summaryItem}>
+                          <Sun size={20} color="#F59E0B" />
+                          <Text style={styles.summaryLabel}>Naps</Text>
+                          <Text style={styles.summaryValue}>{stats.naps}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.summaryRow}>
+                        <View style={styles.summaryItem}>
+                          <Clock size={20} color="#3B82F6" />
+                          <Text style={styles.summaryLabel}>Total Sleep</Text>
+                          <Text style={styles.summaryValue}>
+                            {formatDuration(stats.totalSleep)}
+                          </Text>
+                        </View>
+                        <View style={styles.summaryItem}>
+                          <LineChart size={20} color="#10B981" />
+                          <Text style={styles.summaryLabel}>Quality</Text>
+                          <Text
+                            style={[
+                              styles.summaryValue,
+                              { color: getQualityColor(stats.quality) },
+                            ]}
+                          >
+                            {stats.quality.charAt(0).toUpperCase() +
+                              stats.quality.slice(1)}
+                          </Text>
+                        </View>
+                      </View>
+                    </>
+                  );
+                })()}
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sleep Sessions</Text>
+              {isLoading ? (
+                <Text style={styles.loadingText}>Loading sessions...</Text>
+              ) : sessions.length === 0 ? (
+                <Text style={styles.emptyText}>
+                  No sleep sessions recorded for this day
+                </Text>
+              ) : (
+                sessions.map((session, index) => (
+                  <View key={index} style={styles.sleepSession}>
+                    <View style={styles.sessionTime}>
+                      <Clock size={16} color="#6B7280" />
+                      <Text style={styles.sessionTimeText}>
+                        {format(session.start_time, 'hh:mm a')}
+                        {session.end_time &&
+                          ` - ${format(session.end_time, 'hh:mm a')}`}
                       </Text>
                     </View>
+                    <View style={styles.sessionDetails}>
+                      <Text style={styles.sessionType}>
+                        {session.type === 'night' ? 'Night Sleep' : 'Nap'}
+                      </Text>
+                      {session.duration && (
+                        <Text style={styles.sessionDuration}>
+                          {formatDuration(session.duration)}
+                        </Text>
+                      )}
+                    </View>
                   </View>
-                </>
-              );
-            })()}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sleep Sessions</Text>
-          {isLoading ? (
-            <Text style={styles.loadingText}>Loading sessions...</Text>
-          ) : sessions.length === 0 ? (
-            <Text style={styles.emptyText}>
-              No sleep sessions recorded for this day
-            </Text>
-          ) : (
-            sessions.map((session, index) => (
-              <View key={index} style={styles.sleepSession}>
-                <View style={styles.sessionTime}>
-                  <Clock size={16} color="#6B7280" />
-                  <Text style={styles.sessionTimeText}>
-                    {format(session.start_time, 'hh:mm a')}
-                    {session.end_time &&
-                      ` - ${format(session.end_time, 'hh:mm a')}`}
-                  </Text>
-                </View>
-                <View style={styles.sessionDetails}>
-                  <Text style={styles.sessionType}>
-                    {session.type === 'night' ? 'Night Sleep' : 'Nap'}
-                  </Text>
-                  {session.duration && (
-                    <Text style={styles.sessionDuration}>
-                      {formatDuration(session.duration)}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            ))
-          )}
-        </View>
+                ))
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {!isTracking ? (
@@ -860,5 +954,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     marginTop: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    minHeight: 200,
   },
 });
