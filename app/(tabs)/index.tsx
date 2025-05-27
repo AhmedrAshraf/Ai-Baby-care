@@ -5,7 +5,7 @@ import { Moon, Sun, Baby, Utensils, Plus, Camera, Activity, Syringe, Volume2, Me
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSleepContext } from '@/contexts/SleepContext';
-import { format, formatDistanceToNow } from 'date-fns';
+import { differenceInDays, differenceInMonths, differenceInYears, format, formatDistanceToNow } from 'date-fns';
 import { QuickAction } from '@/components/QuickAction';
 import { useSidebar } from '@/contexts/SidebarContext';
 import Header from '@/components/Header';
@@ -76,7 +76,21 @@ export default function TodayScreen() {
 
   const getBabyAge = () => {
     if (!userProfile?.baby_birthday) return '';
-    return formatDistanceToNow(new Date(userProfile.baby_birthday || ''), { addSuffix: false });
+    
+    const birthDate = new Date(userProfile.baby_birthday);
+    const today = new Date();
+    
+    const years = differenceInYears(today, birthDate);
+    const months = differenceInMonths(today, birthDate) % 12;
+    const days = differenceInDays(today, birthDate) % 30;
+  
+    if (years > 0) {
+      return `${years} ${years === 1 ? 'Year' : 'Years'}`;
+    } else if (months > 0) {
+      return `${months} ${months === 1 ? 'Month' : 'Months'}`;
+    } else {
+      return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+    }
   };
 
   return (
