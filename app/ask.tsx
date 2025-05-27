@@ -129,41 +129,6 @@ export default function AskScreen() {
       <Header
         title="Ask AI Assistant"
         useGradient
-        bottomElement={
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Ask me anything about baby care..."
-              placeholderTextColor="rgba(255, 255, 255, 0.6)"
-              multiline
-              maxLength={500}
-              editable={!isLoading}
-            />
-            <View style={styles.inputActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={toggleRecording}
-                disabled={isLoading}>
-                <Mic
-                  size={24}
-                  color={isRecording ? '#EF4444' : '#FFFFFF'}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.sendButton]}
-                onPress={handleSend}
-                disabled={!inputText.trim() || isLoading}>
-                {isLoading ? (
-                  <ActivityIndicator color="#7C3AED" />
-                ) : (
-                  <Send size={24} color="#7C3AED" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        }
       />
 
       <KeyboardAvoidingView
@@ -177,6 +142,40 @@ export default function AskScreen() {
           showsVerticalScrollIndicator={false}>
           {messages.map(renderMessage)}
         </ScrollView>
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Ask me anything about baby care..."
+            placeholderTextColor="#000"
+            multiline
+            maxLength={500}
+            editable={!isLoading}
+          />
+          <View style={styles.inputActions}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={toggleRecording}
+              disabled={isLoading}>
+              <Mic
+                size={24}
+                color={isRecording ? '#EF4444' : '#000'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.sendButton]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || isLoading}>
+              {isLoading ? (
+                <ActivityIndicator color="#7C3AED" />
+              ) : (
+                <Send size={24} color="#fff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -190,45 +189,50 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
+  messagesContainer: {
+    flex: 1,
+    paddingBottom: 16,
+  },
+  messagesContent: {
+    padding: 16,
+    gap: 16,
+  },
   inputContainer: {
-    marginTop: 8,
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
   },
   input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 12,
-    color: '#FFFFFF',
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    color: '#1F2937',
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    minHeight: 48,
-    maxHeight: 120,
+    height: 100,
   },
   inputActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
-    marginTop: 8,
     gap: 8,
   },
   actionButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendButton: {
-    backgroundColor: '#FFFFFF',
-  },
-  messagesContainer: {
-    flex: 1,
-  },
-  messagesContent: {
-    padding: 16,
-    gap: 16,
+    backgroundColor: '#7C3AED',
   },
   messageContainer: {
     maxWidth: '80%',
