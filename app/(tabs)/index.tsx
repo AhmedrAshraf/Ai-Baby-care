@@ -84,13 +84,23 @@ export default function TodayScreen() {
     const months = differenceInMonths(today, birthDate) % 12;
     const days = differenceInDays(today, birthDate) % 30;
   
+    let ageString = '';
+    
     if (years > 0) {
-      return `${years} ${years === 1 ? 'Year' : 'Years'}`;
-    } else if (months > 0) {
-      return `${months} ${months === 1 ? 'Month' : 'Months'}`;
-    } else {
-      return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+      ageString += `${years} ${years === 1 ? 'year' : 'years'}`;
+      if (months > 0 || days > 0) ageString += ', ';
     }
+    
+    if (months > 0) {
+      ageString += `${months} ${months === 1 ? 'month' : 'months'}`;
+      if (days > 0) ageString += ', ';
+    }
+    
+    if (days > 0 || (years === 0 && months === 0)) {
+      ageString += `${days} ${days === 1 ? 'day' : 'days'}`;
+    }
+    
+    return ageString;
   };
 
   return (
@@ -122,7 +132,7 @@ export default function TodayScreen() {
             <View style={styles.babyDetails}>
               <Text style={styles.babyName}>{userProfile?.baby_name || 'Baby'}</Text>
               <Text style={styles.babyAge}>
-                {getBabyAge()} old
+                {getBabyAge()}
               </Text>
             </View>
           </View>
