@@ -1,6 +1,6 @@
 import React from 'react';
 import { Stack } from 'expo-router';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -57,7 +57,7 @@ export default function RootLayout() {
                   <QuickActionsProvider>
                     <FeedingProvider>
                       <SleepProvider>
-                        <View style={{ flex: 1, paddingBottom: 22, backgroundColor: '#fff'}}>
+                        <View style={{ flex: 1, paddingBottom: Platform.OS === 'ios' ? 22 : 0, backgroundColor: '#fff'}}>
                           <StatusBar style="dark" />
                           <Stack screenOptions={{ headerShown: false }} />
                           <Sidebar />
