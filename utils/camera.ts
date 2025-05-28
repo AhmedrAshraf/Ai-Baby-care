@@ -70,7 +70,7 @@ export async function pickImage(): Promise<CameraResult> {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,

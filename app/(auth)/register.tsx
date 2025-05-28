@@ -3,10 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityInd
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { Camera } from 'lucide-react-native';
+import { Camera, ArrowLeft, Eye, EyeOff, Calendar } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/utils/supabase';
 import { takePhoto, pickImage, handleWebImageUpload } from '@/utils/camera';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const CLOUDINARY_CLOUD_NAME = 'do0qfrr5y';
 const CLOUDINARY_UPLOAD_PRESET = 'desist';
@@ -34,6 +35,8 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   const validateForm = () => {
     console.log('Validating form');
@@ -375,6 +378,15 @@ export default function RegisterScreen() {
     setError('');
   };
 
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      setBabyBirthday(selectedDate.toISOString().split('T')[0]);
+      setError('');
+    }
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -502,16 +514,23 @@ export default function RegisterScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Baby's Birthday</Text>
-            <TextInput
-              style={styles.input}
-              value={babyBirthday}
-              onChangeText={(text) => {
-                setBabyBirthday(text);
-                setError('');
-              }}
-              placeholder="YYYY-MM-DD"
-              editable={!loading}
-            />
+            <TouchableOpacity 
+              style={styles.dateInput}
+              onPress={() => setShowDatePicker(true)}>
+              <Text style={styles.dateInputText}>
+                {selectedDate ? selectedDate.toLocaleDateString() : 'Select date'}
+              </Text>
+              <Calendar size={20} color="#6B7280" />
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={selectedDate || new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+                maximumDate={new Date()}
+              />
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -848,5 +867,20 @@ const styles = StyleSheet.create({
     color: '#7C3AED',
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  dateInputText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#1F2937',
   },
 });

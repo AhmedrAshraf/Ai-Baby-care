@@ -128,13 +128,25 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
         await cancelScheduledNotification(reminder.notificationId);
       }
 
+      // Prepare the update data
+      const updateData = {
+        ...updates,
+        time: updates.time?.toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      // If there's a notificationId, store it in metadata
+      if (updates.notificationId) {
+        updateData.metadata = {
+          ...(reminder.metadata || {}),
+          notificationId: updates.notificationId
+        };
+        delete updateData.notificationId; // Remove from top level
+      }
+
       const { error } = await supabase
         .from('reminders')
-        .update({
-          ...updates,
-          time: updates.time?.toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', id)
         .eq('user_id', user?.id);
 
@@ -151,7 +163,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
             .from('reminders')
             .update({ 
               metadata: { 
-                ...updatedReminder.metadata, 
+                ...(updatedReminder.metadata || {}), 
                 notificationId 
               } 
             })

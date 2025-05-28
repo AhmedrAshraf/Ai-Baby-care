@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Image, Platform, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Camera, Eye, EyeOff, User } from 'lucide-react-native';
+import { ArrowLeft, Camera, Eye, EyeOff, User, Calendar } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/utils/supabase';
 import { useActivityLog } from '@/contexts/ActivityLogContext';
 import { takePhoto, pickImage, handleWebImageUpload } from '@/utils/camera';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const CLOUDINARY_CLOUD_NAME = 'do0qfrr5y';
 const CLOUDINARY_UPLOAD_PRESET = 'desist';
@@ -35,10 +36,18 @@ export default function EditProfileScreen() {
   const [babyGender, setBabyGender] = useState<'boy' | 'girl' | ''>('');
   const [relationshipToChild, setRelationshipToChild] = useState<RelationshipType>('guardian');
   const [customRelationship, setCustomRelationship] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   useEffect(() => {
     loadUserProfile();
   }, []);
+
+  useEffect(() => {
+    if (babyBirthday) {
+      setSelectedDate(new Date(babyBirthday));
+    }
+  }, [babyBirthday]);
 
   const loadUserProfile = async () => {
     if (!user) return;
@@ -207,12 +216,27 @@ export default function EditProfileScreen() {
         updated_at: new Date().toISOString()
       };
 
+      // Update user_profiles table
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update(updates)
         .eq('user_id', user.id);
 
       if (updateError) throw updateError;
+
+      // Update auth.users metadata
+      const { error: userUpdateError } = await supabase.auth.updateUser({
+        data: {
+          parent_name: updates.parent_name,
+          baby_name: updates.baby_name,
+          baby_photo_url: updates.baby_photo_url,
+          baby_birthday: updates.baby_birthday,
+          baby_gender: updates.baby_gender,
+          relationship_to_child: updates.relationship_to_child
+        }
+      });
+
+      if (userUpdateError) throw userUpdateError;
 
       if (newPassword && currentPassword) {
         const { error: passwordError } = await supabase.auth.updateUser({
@@ -243,6 +267,14 @@ export default function EditProfileScreen() {
       setError('Failed to update profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      setBabyBirthday(selectedDate.toISOString().split('T')[0]);
     }
   };
 
@@ -394,13 +426,23 @@ export default function EditProfileScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Baby's Birthday</Text>
-              <TextInput
-                style={styles.input}
-                value={babyBirthday}
-                onChangeText={setBabyBirthday}
-                placeholder="YYYY-MM-DD"
-                editable={!loading}
-              />
+              <TouchableOpacity 
+                style={styles.dateInput}
+                onPress={() => setShowDatePicker(true)}>
+                <Text style={styles.dateInputText}>
+                  {selectedDate ? selectedDate.toLocaleDateString() : 'Select date'}
+                </Text>
+                <Calendar size={20} color="#6B7280" />
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate || new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDateChange}
+                  maximumDate={new Date()}
+                />
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -737,5 +779,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  dateInputText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#1F2937',
   },
 });

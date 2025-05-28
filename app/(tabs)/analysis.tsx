@@ -291,11 +291,11 @@ export default function AnalysisScreen() {
             <Text style={styles.noDataMessage}>
               {showAlert.message}
             </Text>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.switchButton}
               onPress={() => handlePeriodChange('week')}>
               <Text style={styles.switchButtonText}>Switch to Weekly Analysis</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
       ) : !getAnalysisPeriodAvailability()[period === '3months' ? 'threeMonths' : period] ? (
@@ -313,11 +313,11 @@ export default function AnalysisScreen() {
                 )
               }`}
             </Text>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.switchButton}
               onPress={() => handlePeriodChange('week')}>
               <Text style={styles.switchButtonText}>Switch to Weekly Analysis</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </View>
       ) : (
