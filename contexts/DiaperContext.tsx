@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { saveData, loadData } from '@/utils/storage';
+// import { saveData, loadData } from '@/utils/storage';
 import { useAuth } from '@/contexts/AuthContext';
 
 type DiaperChange = {
@@ -35,19 +35,19 @@ export function DiaperProvider({ children }: { children: React.ReactNode }) {
   const [supplies, setSupplies] = useState<DiaperSupply[]>([]);
   const { user } = useAuth();
 
-  useEffect(() => {
-    if (user) {
-      loadData<DiaperChange[]>('diaper_change').then(data => {
-        if (data) {
-          const changes = data.map(change => ({
-            ...change,
-            timestamp: new Date(change.timestamp),
-          }));
-          setDiaperChanges(changes);
-        }
-      });
-    }
-  }, [user]);
+  // useEffect(() => {
+  //   if (user) {
+  //     loadData<DiaperChange[]>('diaper_change').then(data => {
+  //       if (data) {
+  //         const changes = data.map(change => ({
+  //           ...change,
+  //           timestamp: new Date(change.timestamp),
+  //         }));
+  //         setDiaperChanges(changes);
+  //       }
+  //     });
+  //   }
+  // }, [user]);
 
   useEffect(() => {
     if (user && diaperChanges.length > 0) {

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { saveData, loadData } from '@/utils/storage';
+import { supabase } from '@/utils/supabase';
 
 type Vaccination = {
   id: string;
@@ -11,9 +11,10 @@ type Vaccination = {
 
 type VaccinationContextType = {
   vaccinations: Vaccination[];
-  addVaccination: (vaccination: Vaccination) => void;
-  updateVaccination: (vaccination: Vaccination) => void;
-  deleteVaccination: (id: string) => void;
+  addVaccination: (vaccination: Vaccination) => Promise<void>;
+  updateVaccination: (vaccination: Vaccination) => Promise<void>;
+  deleteVaccination: (id: string) => Promise<void>;
+  refreshVaccinations: () => Promise<void>;
 };
 
 const VaccinationContext = createContext<VaccinationContextType | undefined>(undefined);
@@ -21,35 +22,98 @@ const VaccinationContext = createContext<VaccinationContextType | undefined>(und
 export function VaccinationProvider({ children }: { children: React.ReactNode }) {
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
 
-  useEffect(() => {
-    loadData<Vaccination[]>('VACCINATIONS').then(data => {
+  const refreshVaccinations = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('activities')
+        .select('metadata')
+        .eq('user_id', user.id)
+        .eq('type', 'medication')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
       if (data) {
         const records = data.map(record => ({
-          ...record,
-          date: new Date(record.date),
-          nextDose: record.nextDose ? new Date(record.nextDose) : undefined,
+          ...record.metadata,
+          date: new Date(record.metadata.date),
+          nextDose: record.metadata.nextDose ? new Date(record.metadata.nextDose) : undefined,
         }));
         setVaccinations(records);
       }
-    });
-  }, []);
+    } catch (error) {
+      console.error('Error refreshing vaccinations:', error);
+    }
+  };
 
   useEffect(() => {
-    saveData('VACCINATIONS', vaccinations);
-  }, [vaccinations]);
+    refreshVaccinations();
+  }, []);
 
-  const addVaccination = (vaccination: Vaccination) => {
-    setVaccinations(prev => [vaccination, ...prev]);
+  const addVaccination = async (vaccination: Vaccination) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .insert({
+          user_id: user.id,
+          type: 'medication',
+          metadata: vaccination,
+          status: 'completed',
+          start_time: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+      await refreshVaccinations();
+    } catch (error) {
+      console.error('Error adding vaccination:', error);
+    }
   };
 
-  const updateVaccination = (vaccination: Vaccination) => {
-    setVaccinations(prev => prev.map(v => 
-      v.id === vaccination.id ? vaccination : v
-    ));
+  const updateVaccination = async (vaccination: Vaccination) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .update({
+          metadata: vaccination,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('metadata->id', vaccination.id)
+        .eq('user_id', user.id)
+        .eq('type', 'medication');
+
+      if (error) throw error;
+      await refreshVaccinations();
+    } catch (error) {
+      console.error('Error updating vaccination:', error);
+    }
   };
 
-  const deleteVaccination = (id: string) => {
-    setVaccinations(prev => prev.filter(v => v.id !== id));
+  const deleteVaccination = async (id: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('metadata->id', id)
+        .eq('user_id', user.id)
+        .eq('type', 'medication');
+
+      if (error) throw error;
+      await refreshVaccinations();
+    } catch (error) {
+      console.error('Error deleting vaccination:', error);
+    }
   };
 
   return (
@@ -59,6 +123,7 @@ export function VaccinationProvider({ children }: { children: React.ReactNode })
         addVaccination,
         updateVaccination,
         deleteVaccination,
+        refreshVaccinations,
       }}>
       {children}
     </VaccinationContext.Provider>

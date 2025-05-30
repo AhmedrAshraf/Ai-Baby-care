@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { saveData, loadData } from '@/utils/storage';
+import { supabase } from '@/utils/supabase';
+import { ACTIVITY_TYPE_MAP } from '@/utils/activityTypes';
 
 type Medication = {
   id: string;
@@ -13,9 +14,10 @@ type Medication = {
 
 type MedicationContextType = {
   medications: Medication[];
-  addMedication: (medication: Medication) => void;
-  updateMedication: (medication: Medication) => void;
-  deleteMedication: (id: string) => void;
+  addMedication: (medication: Medication) => Promise<void>;
+  updateMedication: (medication: Medication) => Promise<void>;
+  deleteMedication: (id: string) => Promise<void>;
+  refreshMedications: () => Promise<void>;
 };
 
 const MedicationContext = createContext<MedicationContextType | undefined>(undefined);
@@ -23,35 +25,98 @@ const MedicationContext = createContext<MedicationContextType | undefined>(undef
 export function MedicationProvider({ children }: { children: React.ReactNode }) {
   const [medications, setMedications] = useState<Medication[]>([]);
 
-  useEffect(() => {
-    loadData<Medication[]>('MEDICATIONS').then(data => {
+  const refreshMedications = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('activities')
+        .select('metadata')
+        .eq('user_id', user.id)
+        .eq('type', ACTIVITY_TYPE_MAP.medication)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
       if (data) {
         const records = data.map(record => ({
-          ...record,
-          startDate: new Date(record.startDate),
-          endDate: record.endDate ? new Date(record.endDate) : undefined,
+          ...record.metadata,
+          startDate: new Date(record.metadata.startDate),
+          endDate: record.metadata.endDate ? new Date(record.metadata.endDate) : undefined,
         }));
         setMedications(records);
       }
-    });
-  }, []);
+    } catch (error) {
+      console.error('Error refreshing medications:', error);
+    }
+  };
 
   useEffect(() => {
-    saveData('MEDICATIONS', medications);
-  }, [medications]);
+    refreshMedications();
+  }, []);
 
-  const addMedication = (medication: Medication) => {
-    setMedications(prev => [medication, ...prev]);
+  const addMedication = async (medication: Medication) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .insert({
+          user_id: user.id,
+          type: ACTIVITY_TYPE_MAP.medication,
+          metadata: medication,
+          status: 'completed',
+          start_time: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+      await refreshMedications();
+    } catch (error) {
+      console.error('Error adding medication:', error);
+    }
   };
 
-  const updateMedication = (medication: Medication) => {
-    setMedications(prev => prev.map(m => 
-      m.id === medication.id ? medication : m
-    ));
+  const updateMedication = async (medication: Medication) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .update({
+          metadata: medication,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('metadata->id', medication.id)
+        .eq('user_id', user.id)
+        .eq('type', ACTIVITY_TYPE_MAP.medication);
+
+      if (error) throw error;
+      await refreshMedications();
+    } catch (error) {
+      console.error('Error updating medication:', error);
+    }
   };
 
-  const deleteMedication = (id: string) => {
-    setMedications(prev => prev.filter(m => m.id !== id));
+  const deleteMedication = async (id: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('metadata->id', id)
+        .eq('user_id', user.id)
+        .eq('type', ACTIVITY_TYPE_MAP.medication);
+
+      if (error) throw error;
+      await refreshMedications();
+    } catch (error) {
+      console.error('Error deleting medication:', error);
+    }
   };
 
   return (
@@ -61,6 +126,7 @@ export function MedicationProvider({ children }: { children: React.ReactNode }) 
         addMedication,
         updateMedication,
         deleteMedication,
+        refreshMedications,
       }}>
       {children}
     </MedicationContext.Provider>

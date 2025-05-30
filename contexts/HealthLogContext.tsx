@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { saveData, loadData } from '@/utils/storage';
+import { supabase } from '@/utils/supabase';
+import { ACTIVITY_TYPE_MAP } from '@/utils/activityTypes';
 
 export type HealthIssue = 
   | 'constipation'
@@ -14,19 +15,19 @@ export type Severity = 'mild' | 'moderate' | 'severe';
 
 export type HealthLog = {
   id: string;
-  type: HealthIssue;
-  timestamp: Date;
-  severity: Severity;
-  temperature?: number;
+  type: 'temperature' | 'medication' | 'other';
+  value: number;
+  unit: string;
+  date: Date;
   notes?: string;
-  photoUrl?: string;
 };
 
 type HealthLogContextType = {
   healthLogs: HealthLog[];
-  addHealthLog: (log: HealthLog) => void;
-  updateHealthLog: (log: HealthLog) => void;
-  deleteHealthLog: (id: string) => void;
+  addHealthLog: (log: HealthLog) => Promise<void>;
+  updateHealthLog: (log: HealthLog) => Promise<void>;
+  deleteHealthLog: (id: string) => Promise<void>;
+  refreshHealthLogs: () => Promise<void>;
 };
 
 const HealthLogContext = createContext<HealthLogContextType | undefined>(undefined);
@@ -34,36 +35,97 @@ const HealthLogContext = createContext<HealthLogContextType | undefined>(undefin
 export function HealthLogProvider({ children }: { children: React.ReactNode }) {
   const [healthLogs, setHealthLogs] = useState<HealthLog[]>([]);
 
-  useEffect(() => {
-    loadData<HealthLog[]>('HEALTH_LOGS').then(data => {
+  const refreshHealthLogs = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('activities')
+        .select('metadata')
+        .eq('user_id', user.id)
+        .in('type', [ACTIVITY_TYPE_MAP.temperature, ACTIVITY_TYPE_MAP.medication])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
       if (data) {
-        const logs = data.map(log => ({
-          ...log,
-          timestamp: new Date(log.timestamp),
+        const records = data.map(record => ({
+          ...record.metadata,
+          date: new Date(record.metadata.date),
         }));
-        setHealthLogs(logs);
+        setHealthLogs(records);
       }
-    });
+    } catch (error) {
+      console.error('Error refreshing health logs:', error);
+    }
+  };
+
+  useEffect(() => {
+    refreshHealthLogs();
   }, []);
 
-  useEffect(() => {
-    if (healthLogs.length > 0) {
-      saveData('HEALTH_LOGS', healthLogs);
+  const addHealthLog = async (log: HealthLog) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .insert({
+          user_id: user.id,
+          type: ACTIVITY_TYPE_MAP[log.type],
+          metadata: log,
+          status: 'completed',
+          start_time: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+      await refreshHealthLogs();
+    } catch (error) {
+      console.error('Error adding health log:', error);
     }
-  }, [healthLogs]);
-
-  const addHealthLog = (log: HealthLog) => {
-    setHealthLogs(prev => [log, ...prev]);
   };
 
-  const updateHealthLog = (log: HealthLog) => {
-    setHealthLogs(prev => prev.map(l => 
-      l.id === log.id ? log : l
-    ));
+  const updateHealthLog = async (log: HealthLog) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .update({
+          metadata: log,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('metadata->id', log.id)
+        .eq('user_id', user.id)
+        .eq('type', ACTIVITY_TYPE_MAP[log.type]);
+
+      if (error) throw error;
+      await refreshHealthLogs();
+    } catch (error) {
+      console.error('Error updating health log:', error);
+    }
   };
 
-  const deleteHealthLog = (id: string) => {
-    setHealthLogs(prev => prev.filter(l => l.id !== id));
+  const deleteHealthLog = async (id: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('metadata->id', id)
+        .eq('user_id', user.id)
+        .in('type', [ACTIVITY_TYPE_MAP.temperature, ACTIVITY_TYPE_MAP.medication]);
+
+      if (error) throw error;
+      await refreshHealthLogs();
+    } catch (error) {
+      console.error('Error deleting health log:', error);
+    }
   };
 
   return (
@@ -73,6 +135,7 @@ export function HealthLogProvider({ children }: { children: React.ReactNode }) {
         addHealthLog,
         updateHealthLog,
         deleteHealthLog,
+        refreshHealthLogs,
       }}>
       {children}
     </HealthLogContext.Provider>
