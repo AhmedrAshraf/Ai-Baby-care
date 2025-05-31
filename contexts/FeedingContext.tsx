@@ -114,13 +114,13 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (showTimer && currentSession) {
+      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+      let totalSeconds = 0;
       interval = setInterval(() => {
-        const now = new Date();
-        const diffInSeconds = Math.floor((now.getTime() - currentSession.startTime.getTime()) / 1000);
-        
-        const hours = Math.floor(diffInSeconds / 3600);
-        const minutes = Math.floor((diffInSeconds % 3600) / 60);
-        const seconds = diffInSeconds % 60;
+        totalSeconds += 1;
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
         
         setElapsedTime({ hours, minutes, seconds });
       }, 1000);
@@ -208,14 +208,23 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
 
       if (data) {
+        // Ensure we're using the exact time from the database
+        const startTime = new Date(data.start_time);
+        console.log('Session Start Time Debug:', {
+          localStartTime: newSession.startTime.toISOString(),
+          dbStartTime: data.start_time,
+          parsedStartTime: startTime.toISOString()
+        });
+        
         const formattedSession = {
           ...data,
-          startTime: new Date(data.start_time),
+          startTime,
           end_time: data.end_time ? new Date(data.end_time) : undefined,
           foodType: data.food_type,
         };
         setCurrentSession(formattedSession);
         setShowTimer(true);
+        setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
       }
     } catch (error) {
       console.error('Error starting breastfeeding session:', error);
