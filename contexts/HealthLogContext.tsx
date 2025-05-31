@@ -20,6 +20,8 @@ export type HealthLog = {
   unit: string;
   date: Date;
   notes?: string;
+  healthIssue?: HealthIssue;
+  severity?: Severity;
 };
 
 type HealthLogContextType = {
@@ -42,9 +44,9 @@ export function HealthLogProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await supabase
         .from('activities')
-        .select('metadata')
+        .select('*')
         .eq('user_id', user.id)
-        .in('type', [ACTIVITY_TYPE_MAP.temperature, ACTIVITY_TYPE_MAP.medication])
+        .eq('type', 'temperature')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -67,23 +69,35 @@ export function HealthLogProvider({ children }: { children: React.ReactNode }) {
 
   const addHealthLog = async (log: HealthLog) => {
     try {
+      console.log('Adding health log:', log);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Ensure we have a valid date
+      const date = log.date ? new Date(log.date) : new Date();
+      console.log('Using date:', date);
 
       const { error } = await supabase
         .from('activities')
         .insert({
           user_id: user.id,
-          type: ACTIVITY_TYPE_MAP[log.type],
-          metadata: log,
+          type: 'temperature', // Always use temperature for health logs
           status: 'completed',
-          start_time: new Date().toISOString(),
+          start_time: date.toISOString(),
+          metadata: {
+            ...log,
+            date: date.toISOString()
+          }
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
       await refreshHealthLogs();
     } catch (error) {
       console.error('Error adding health log:', error);
+      throw error;
     }
   };
 
@@ -92,20 +106,26 @@ export function HealthLogProvider({ children }: { children: React.ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const date = log.date ? new Date(log.date) : new Date();
+
       const { error } = await supabase
         .from('activities')
         .update({
-          metadata: log,
+          type: 'temperature', // Always use temperature for health logs
+          metadata: {
+            ...log,
+            date: date.toISOString()
+          },
           updated_at: new Date().toISOString(),
         })
         .eq('metadata->id', log.id)
-        .eq('user_id', user.id)
-        .eq('type', ACTIVITY_TYPE_MAP[log.type]);
+        .eq('user_id', user.id);
 
       if (error) throw error;
       await refreshHealthLogs();
     } catch (error) {
       console.error('Error updating health log:', error);
+      throw error;
     }
   };
 
@@ -119,7 +139,7 @@ export function HealthLogProvider({ children }: { children: React.ReactNode }) {
         .delete()
         .eq('metadata->id', id)
         .eq('user_id', user.id)
-        .in('type', [ACTIVITY_TYPE_MAP.temperature, ACTIVITY_TYPE_MAP.medication]);
+        .eq('type', 'temperature');
 
       if (error) throw error;
       await refreshHealthLogs();
