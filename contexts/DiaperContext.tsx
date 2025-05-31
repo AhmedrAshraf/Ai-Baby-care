@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-// import { saveData, loadData } from '@/utils/storage';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/utils/supabase';
 
 type DiaperChange = {
   id: string;
@@ -9,6 +9,11 @@ type DiaperChange = {
   brand?: string;
   size?: string;
   notes?: string;
+  user_id?: string;
+  metadata?: {
+    type: 'wet' | 'dirty' | 'both';
+    notes?: string;
+  };
 };
 
 type DiaperSupply = {
@@ -23,7 +28,7 @@ type DiaperSupply = {
 type DiaperContextType = {
   diaperChanges: DiaperChange[];
   supplies: DiaperSupply[];
-  addDiaperChange: (change: DiaperChange) => void;
+  addDiaperChange: (change: DiaperChange) => Promise<void>;
   updateSupply: (supply: DiaperSupply) => void;
   decrementSupply: (supplyId: string) => void;
 };
@@ -35,28 +40,57 @@ export function DiaperProvider({ children }: { children: React.ReactNode }) {
   const [supplies, setSupplies] = useState<DiaperSupply[]>([]);
   const { user } = useAuth();
 
-  // useEffect(() => {
-  //   if (user) {
-  //     loadData<DiaperChange[]>('diaper_change').then(data => {
-  //       if (data) {
-  //         const changes = data.map(change => ({
-  //           ...change,
-  //           timestamp: new Date(change.timestamp),
-  //         }));
-  //         setDiaperChanges(changes);
-  //       }
-  //     });
-  //   }
-  // }, [user]);
-
   useEffect(() => {
-    if (user && diaperChanges.length > 0) {
-      saveData('diaper_change', diaperChanges);
+    if (user) {
+      loadDiaperChanges();
     }
-  }, [diaperChanges, user]);
+  }, [user]);
 
-  const addDiaperChange = (change: DiaperChange) => {
-    setDiaperChanges(prev => [change, ...prev]);
+  const loadDiaperChanges = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('type', 'diaper_change')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const changes = data.map((change: any) => ({
+          ...change,
+          timestamp: new Date(change.created_at),
+        }));
+        setDiaperChanges(changes);
+      }
+    } catch (error) {
+      console.error('Error loading diaper changes:', error);
+    }
+  };
+
+  const addDiaperChange = async (change: DiaperChange) => {
+    try {
+      const { error } = await supabase
+        .from('activities')
+        .insert({
+          user_id: user?.id,
+          type: 'diaper_change',
+          created_at: change.timestamp.toISOString(),
+          updated_at: change.timestamp.toISOString(),
+          metadata: {
+            type: change.type,
+            notes: change.notes
+          }
+        });
+
+      if (error) throw error;
+
+      await loadDiaperChanges(); // Reload the changes after adding
+    } catch (error) {
+      console.error('Error adding diaper change:', error);
+      throw error;
+    }
   };
 
   const updateSupply = (supply: DiaperSupply) => {

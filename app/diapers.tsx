@@ -100,7 +100,7 @@ export default function DiapersScreen() {
     }
   };
 
-  const getTypeLabel = (type: 'wet' | 'dirty' | 'both') => {
+  const getTypeLabel = (type: string) => {
     switch (type) {
       case 'wet':
         return { text: 'Wet', color: '#3B82F6', bgColor: '#EFF6FF' };
@@ -108,6 +108,8 @@ export default function DiapersScreen() {
         return { text: 'Dirty', color: '#F59E0B', bgColor: '#FEF3C7' };
       case 'both':
         return { text: 'Both', color: '#EC4899', bgColor: '#FCE7F3' };
+      default:
+        return { text: 'Unknown', color: '#6B7280', bgColor: '#F3F4F6' };
     }
   };
 
@@ -183,36 +185,32 @@ export default function DiapersScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Changes</Text>
-          {getFilteredChanges().map(change => (
-            <View key={change.id} style={styles.changeCard}>
-              <View style={styles.changeTime}>
-                <Timer size={16} color="#6B7280" />
-                <Text style={styles.changeTimeText}>
-                  {format(change.timestamp, 'h:mm a')}
-                </Text>
-              </View>
-              <View style={styles.changeDetails}>
-                <View style={[
-                  styles.typeTag,
-                  { backgroundColor: getTypeLabel(change.type).bgColor }
+          {getFilteredChanges().map((change) => {
+            const type = change.metadata?.type || change.type;
+            return (
+              <View
+                key={change.id}
+                style={[
+                  styles.changeCard,
+                  { backgroundColor: getTypeLabel(type).bgColor }
                 ]}>
-                  {getTypeIcon(change.type)}
-                  <Text style={[
-                    styles.typeText,
-                    { color: getTypeLabel(change.type).color }
-                  ]}>
-                    {getTypeLabel(change.type).text}
+                <View style={styles.changeTime}>
+                  <Timer size={16} color="#6B7280" />
+                  <Text style={styles.timeText}>
+                    {format(change.timestamp, 'h:mm a')}
                   </Text>
                 </View>
-                <Text style={styles.changeBrandText}>
-                  {change.brand} - Size {change.size}
-                </Text>
+                <View style={styles.changeDetails}>
+                  <Text style={[styles.changeType, { color: getTypeLabel(type).color }]}>
+                    {getTypeLabel(type).text}
+                  </Text>
+                  {change.metadata?.notes && (
+                    <Text style={styles.changeNotes}>{change.metadata.notes}</Text>
+                  )}
+                </View>
               </View>
-              {change.notes && (
-                <Text style={styles.changeNotes}>{change.notes}</Text>
-              )}
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -445,7 +443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  changeTimeText: {
+  timeText: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
@@ -456,22 +454,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  typeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-  },
-  typeText: {
+  changeType: {
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
-  },
-  changeBrandText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#6B7280',
   },
   changeNotes: {
     fontSize: 14,
