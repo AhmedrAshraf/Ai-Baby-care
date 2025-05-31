@@ -190,24 +190,30 @@ export default function DiapersScreen() {
             return (
               <View
                 key={change.id}
-                style={[
-                  styles.changeCard,
-                  { backgroundColor: getTypeLabel(type).bgColor }
-                ]}>
+                style={styles.changeCard}>
                 <View style={styles.changeTime}>
                   <Timer size={16} color="#6B7280" />
-                  <Text style={styles.timeText}>
+                  <Text style={styles.changeTimeText}>
                     {format(change.timestamp, 'h:mm a')}
                   </Text>
                 </View>
                 <View style={styles.changeDetails}>
-                  <Text style={[styles.changeType, { color: getTypeLabel(type).color }]}>
-                    {getTypeLabel(type).text}
-                  </Text>
-                  {change.metadata?.notes && (
-                    <Text style={styles.changeNotes}>{change.metadata.notes}</Text>
-                  )}
+                  <View style={[
+                    styles.typeTag,
+                    { backgroundColor: getTypeLabel(type).bgColor }
+                  ]}>
+                    {getTypeIcon(type)}
+                    <Text style={[
+                      styles.typeText,
+                      { color: getTypeLabel(type).color }
+                    ]}>
+                      {getTypeLabel(type).text}
+                    </Text>
+                  </View>
                 </View>
+                {change.metadata?.notes && (
+                  <Text style={styles.changeNotes}>{change.metadata.notes}</Text>
+                )}
               </View>
             );
           })}
@@ -443,7 +449,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  timeText: {
+  changeTimeText: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
@@ -454,7 +460,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  changeType: {
+  typeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  typeText: {
     fontSize: 14,
     fontFamily: 'Inter-SemiBold',
   },
@@ -462,8 +476,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#6B7280',
-    fontStyle: 'italic',
     marginTop: 8,
+    fontStyle: 'italic',
   },
   addButton: {
     position: 'absolute',
