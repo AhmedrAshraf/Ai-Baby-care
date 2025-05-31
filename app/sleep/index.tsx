@@ -148,31 +148,50 @@ export default function SleepScreen() {
   const loadSleepSessions = async () => {
     try {
       setIsLoading(true);
-      if (!user) return;
+      if (!user) {
+        console.log('No user found, skipping session load');
+        return;
+      }
 
+      console.log('Loading sleep sessions for date:', selectedDate);
       const startOfDay = new Date(selectedDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(selectedDate);
       endOfDay.setHours(23, 59, 59, 999);
 
+      console.log('Date range:', {
+        start: startOfDay.toISOString(),
+        end: endOfDay.toISOString()
+      });
+
       const { data, error } = await supabase
-        .from('sleep_sessions')
+        .from('sleep_records')  // Changed from sleep_sessions to sleep_records
         .select('*')
         .eq('user_id', user.id)
         .gte('start_time', startOfDay.toISOString())
         .lte('start_time', endOfDay.toISOString())
         .order('start_time', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading sleep sessions:', error);
+        throw error;
+      }
 
-      const formattedSessions = (data as DatabaseSleepSession[]).map(
-        (session) => ({
-          ...session,
-          start_time: new Date(session.start_time),
-          end_time: session.end_time ? new Date(session.end_time) : undefined,
-        })
-      );
+      console.log('Loaded sessions:', data);
 
+      if (!data || data.length === 0) {
+        console.log('No sessions found for the selected date');
+        setSessions([]);
+        return;
+      }
+
+      const formattedSessions = data.map((session) => ({
+        ...session,
+        start_time: new Date(session.start_time),
+        end_time: session.end_time ? new Date(session.end_time) : undefined,
+      }));
+
+      console.log('Formatted sessions:', formattedSessions);
       setSessions(formattedSessions);
     } catch (error) {
       console.error('Error loading sleep sessions:', error);
@@ -182,8 +201,9 @@ export default function SleepScreen() {
     }
   };
 
-  // Load sessions when date changes
+  // Load sessions when date changes or after stopping a session
   useEffect(() => {
+    console.log('Effect triggered - Loading sessions');
     loadSleepSessions();
   }, [selectedDate, user]);
 
@@ -277,17 +297,34 @@ export default function SleepScreen() {
   };
 
   const stopTracking = async () => {
+    console.log('Stop tracking button pressed');
     try {
-      if (!currentSession || !user) return;
+      if (!currentSession || !user) {
+        console.log('No active session or user:', { currentSession, user });
+        Alert.alert('Error', 'No active sleep session to stop');
+        return;
+      }
 
+      console.log('Current session:', currentSession);
       const end_time = new Date();
       const start_time = new Date(currentSession.start_time);
 
       // Ensure we're working with valid dates
       if (isNaN(start_time.getTime()) || isNaN(end_time.getTime())) {
+        console.log('Invalid dates detected:', { start_time, end_time });
         Alert.alert(
           'Invalid Time',
           'Unable to calculate sleep duration. Please try again.'
+        );
+        return;
+      }
+
+      // Check if start time is in the future
+      if (start_time > end_time) {
+        console.log('Start time is in the future:', { start_time, end_time });
+        Alert.alert(
+          'Invalid Time',
+          'Sleep session start time cannot be in the future. Please check your device time settings.'
         );
         return;
       }
@@ -297,9 +334,52 @@ export default function SleepScreen() {
         0,
         Math.floor((end_time.getTime() - start_time.getTime()) / (1000 * 60))
       );
+      console.log('Calculated duration:', durationInMinutes, 'minutes');
 
-      // Validate duration
+      // Check for minimum duration
+      if (durationInMinutes < 1) {
+        Alert.alert(
+          'Session Too Short',
+          'Please track sleep for at least 1 minute before stopping.',
+          [
+            {
+              text: 'Continue Tracking',
+              style: 'cancel',
+            },
+            {
+              text: 'Discard Session',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  // Delete the session instead of updating it
+                  const { error } = await supabase
+                    .from('sleep_records')
+                    .delete()
+                    .eq('id', currentSession.id);
+
+                  if (error) {
+                    console.error('Error deleting session:', error);
+                    throw error;
+                  }
+
+                  setCurrentSession(null);
+                  setIsTracking(false);
+                  setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+                  await loadSleepSessions();
+                } catch (error) {
+                  console.error('Error discarding session:', error);
+                  Alert.alert('Error', 'Failed to discard session. Please try again.');
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Validate maximum duration
       if (durationInMinutes > 1440) { // 24 hours in minutes
+        console.log('Duration exceeds 24 hours');
         Alert.alert(
           'Invalid Duration',
           'Sleep duration cannot exceed 24 hours. Please check your device time settings.'
@@ -308,6 +388,7 @@ export default function SleepScreen() {
       }
 
       // Show confirmation dialog
+      console.log('Showing confirmation dialog');
       Alert.alert(
         'Stop Sleep Session',
         'Are you sure you want to stop tracking this sleep session?',
@@ -315,45 +396,89 @@ export default function SleepScreen() {
           {
             text: 'Cancel',
             style: 'cancel',
+            onPress: () => console.log('Stop tracking cancelled'),
           },
           {
             text: 'Stop',
             style: 'destructive',
             onPress: async () => {
+              console.log('Stop confirmed, proceeding with stop tracking');
               try {
+                const { data: verifySession, error: verifyError } = await supabase
+                  .from('sleep_records')
+                  .select('*')
+                  .eq('id', currentSession.id)
+                  .is('end_time', null)
+                  .single();
+
+                if (verifyError) {
+                  console.error('Verification error:', verifyError);
+                  throw new Error('Session no longer exists or has already ended');
+                }
+
+                if (!verifySession) {
+                  console.log('No active session found during verification');
+                  throw new Error('Session no longer exists or has already ended');
+                }
+
+                const finalStartTime = start_time > end_time ? end_time : start_time;
+                const finalDuration = Math.max(
+                  0,
+                  Math.floor((end_time.getTime() - finalStartTime.getTime()) / (1000 * 60))
+                );
+
+                console.log('Updating session in database:', {
+                  id: currentSession.id,
+                  end_time: end_time.toISOString(),
+                  duration: finalDuration,
+                  start_time: finalStartTime.toISOString()
+                });
+
                 const { error } = await supabase
                   .from('sleep_records')
                   .update({
                     end_time: end_time.toISOString(),
-                    duration: durationInMinutes,
+                    duration: finalDuration,
+                    start_time: finalStartTime.toISOString(),
                   })
-                  .eq('id', currentSession.id);
+                  .eq('id', currentSession.id)
+                  .is('end_time', null);
 
                 if (error) {
-                  console.error('Supabase error:', error);
+                  console.error('Database update error:', error);
                   throw error;
                 }
 
+                console.log('Session updated successfully');
                 const completedSession: SleepSession = {
                   ...currentSession,
+                  start_time: finalStartTime,
                   end_time,
-                  duration: durationInMinutes,
+                  duration: finalDuration,
                 };
 
                 setSessions((prev) => [completedSession, ...prev]);
                 setCurrentSession(null);
                 setIsTracking(false);
                 setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+                
+                // Reload sessions to ensure UI is in sync
+                console.log('Reloading sessions after stop');
+                await loadSleepSessions();
+                console.log('Stop tracking completed successfully');
               } catch (error) {
-                console.error('Error stopping sleep session:', error);
-                Alert.alert('Error', 'Failed to stop sleep session. Please try again.');
+                console.error('Error in stop tracking process:', error);
+                Alert.alert(
+                  'Error',
+                  'Failed to stop sleep session. Please try again.'
+                );
               }
             },
           },
         ]
       );
     } catch (error) {
-      console.error('Error stopping sleep session:', error);
+      console.error('Error in stop tracking:', error);
       Alert.alert('Error', 'Failed to stop sleep session. Please try again.');
     }
   };
