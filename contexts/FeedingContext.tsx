@@ -2,11 +2,27 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
+type DatabaseFeedingSession = {
+  id?: string;
+  type: 'breast' | 'bottle' | 'solid';
+  start_time: string;
+  end_time?: string;
+  duration?: number;
+  amount?: number;
+  unit?: 'ml' | 'oz';
+  side?: 'left' | 'right' | 'both';
+  food_type?: string;
+  notes?: string;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 type FeedingSession = {
   id: string;
   type: 'breast' | 'bottle' | 'solid';
-  startTime: Date;
-  end_time?: Date;
+  startTime: Date;  // Change back to Date for database compatibility
+  endTime?: Date;
   duration?: number;
   amount?: number;
   unit?: 'ml' | 'oz';
@@ -27,9 +43,9 @@ type FeedingContextType = {
   currentSession: FeedingSession | null;
   showTimer: boolean;
   elapsedTime: ElapsedTime;
-  addFeedingSession: (session: FeedingSession) => void;
-  startBreastfeeding: (side: 'left' | 'right') => void;
-  stopBreastfeeding: () => void;
+  addFeedingSession: (session: FeedingSession) => Promise<void>;
+  startBreastfeeding: (side: 'left' | 'right') => Promise<void>;
+  stopBreastfeeding: () => Promise<void>;
   setShowTimer: (show: boolean) => void;
 };
 
@@ -42,11 +58,79 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
   const [elapsedTime, setElapsedTime] = useState<ElapsedTime>({ hours: 0, minutes: 0, seconds: 0 });
   const { user } = useAuth();
 
-  // Load saved feeding sessions and check for active session
+  // Check for active session when component mounts
   useEffect(() => {
-    loadFeedingSessions();
-    checkForActiveSession();
+    const checkActiveSession = async () => {
+      try {
+        if (!user?.id) return;
+
+        const { data: activeSession, error } = await supabase
+          .from('feeding_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .is('end_time', null)
+          .single();
+
+        if (error) {
+          if (error.code === 'PGRST116') return;
+          console.error('Error checking for active session:', error);
+          throw error;
+        }
+
+        if (activeSession) {
+          // Adjust for timezone offset
+          const startTime = new Date(activeSession.start_time);
+          const timezoneOffset = startTime.getTimezoneOffset() * 60000; // Convert minutes to milliseconds
+          const adjustedStartTime = new Date(startTime.getTime() - timezoneOffset);
+
+          const session: FeedingSession = {
+            id: activeSession.id,
+            type: activeSession.type,
+            startTime: adjustedStartTime,
+            endTime: activeSession.end_time ? new Date(activeSession.end_time) : undefined,
+            foodType: activeSession.food_type,
+            user_id: activeSession.user_id,
+            side: activeSession.side,
+            amount: activeSession.amount,
+            unit: activeSession.unit,
+            notes: activeSession.notes,
+            duration: activeSession.duration
+          };
+          setCurrentSession(session);
+          setShowTimer(true);
+        }
+      } catch (error) {
+        console.error('Error in checkActiveSession:', error);
+      }
+    };
+
+    checkActiveSession();
   }, [user]);
+
+  // Timer effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (currentSession && showTimer) {
+      const updateTimer = () => {
+        const now = new Date();
+        const elapsed = Math.floor((now.getTime() - currentSession.startTime.getTime()) / 1000);
+        const hours = Math.floor(elapsed / 3600);
+        const minutes = Math.floor((elapsed % 3600) / 60);
+        const seconds = elapsed % 60;
+        setElapsedTime({ hours, minutes, seconds });
+      };
+
+      updateTimer();
+      interval = setInterval(updateTimer, 1000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [currentSession, showTimer]);
 
   const loadFeedingSessions = async () => {
     try {
@@ -58,75 +142,24 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', user.id)
         .order('start_time', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading feeding sessions:', error);
+        throw error;
+      }
 
       if (data) {
         const sessions = data.map(session => ({
           ...session,
           startTime: new Date(session.start_time),
-          end_time: session.end_time ? new Date(session.end_time) : undefined,
+          endTime: session.end_time ? new Date(session.end_time) : undefined,
           foodType: session.food_type,
         }));
         setFeedingSessions(sessions);
       }
     } catch (error) {
-      console.error('Error loading feeding sessions:', error);
+      console.error('Error in loadFeedingSessions:', error);
     }
   };
-
-  const checkForActiveSession = async () => {
-    try {
-      if (!user?.id) return;
-
-      // Find the most recent session without an end_time
-      const { data, error } = await supabase
-        .from('feeding_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .is('end_time', null)
-        .order('start_time', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // No active session found
-          return;
-        }
-        throw error;
-      }
-
-      if (data) {
-        const activeSession = {
-          ...data,
-          startTime: new Date(data.start_time),
-          end_time: data.end_time ? new Date(data.end_time) : undefined,
-          foodType: data.food_type,
-        };
-        setCurrentSession(activeSession);
-        setShowTimer(true);
-      }
-    } catch (error) {
-      console.error('Error checking for active session:', error);
-    }
-  };
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (showTimer && currentSession) {
-      setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
-      let totalSeconds = 0;
-      interval = setInterval(() => {
-        totalSeconds += 1;
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        
-        setElapsedTime({ hours, minutes, seconds });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [showTimer, currentSession]);
 
   const addFeedingSession = async (session: FeedingSession) => {
     try {
@@ -138,7 +171,7 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
           user_id: user.id,
           type: session.type,
           start_time: session.startTime.toISOString(),
-          end_time: session.end_time?.toISOString(),
+          end_time: session.endTime?.toISOString(),
           duration: session.duration,
           amount: session.amount,
           unit: session.unit,
@@ -149,19 +182,22 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error adding feeding session:', error);
+        throw error;
+      }
 
       if (data) {
         const formattedSession = {
           ...data,
           startTime: new Date(data.start_time),
-          end_time: data.end_time ? new Date(data.end_time) : undefined,
+          endTime: data.end_time ? new Date(data.end_time) : undefined,
           foodType: data.food_type,
         };
         setFeedingSessions(prev => [formattedSession, ...prev]);
       }
     } catch (error) {
-      console.error('Error adding feeding session:', error);
+      console.error('Error in addFeedingSession:', error);
     }
   };
 
@@ -169,7 +205,6 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!user?.id) return;
 
-      // Check if there's already an active session
       const { data: existingSession, error: checkError } = await supabase
         .from('feeding_sessions')
         .select('*')
@@ -178,56 +213,53 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking for existing session:', checkError);
         throw checkError;
       }
 
-      if (existingSession) {
-        console.log('Active session already exists');
-        return;
-      }
+      if (existingSession) return;
 
-      const newSession: FeedingSession = {
-        id: Date.now().toString(),
-        type: 'breast',
-        startTime: new Date(),
-        side,
+      const startDate = new Date();
+      
+      const sessionData: Omit<DatabaseFeedingSession, 'id'> = {
         user_id: user.id,
+        type: 'breast',
+        start_time: startDate.toISOString(),
+        side,
+        created_at: startDate.toISOString(),
+        updated_at: startDate.toISOString()
       };
 
       const { data, error } = await supabase
         .from('feeding_sessions')
-        .insert({
-          user_id: user.id,
-          type: 'breast',
-          start_time: newSession.startTime.toISOString(),
-          side,
-        })
+        .insert(sessionData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating breastfeeding session:', error);
+        throw error;
+      }
 
       if (data) {
-        // Ensure we're using the exact time from the database
-        const startTime = new Date(data.start_time);
-        console.log('Session Start Time Debug:', {
-          localStartTime: newSession.startTime.toISOString(),
-          dbStartTime: data.start_time,
-          parsedStartTime: startTime.toISOString()
-        });
-        
-        const formattedSession = {
-          ...data,
-          startTime,
-          end_time: data.end_time ? new Date(data.end_time) : undefined,
+        const formattedSession: FeedingSession = {
+          id: data.id,
+          type: data.type,
+          startTime: startDate,
+          endTime: undefined,
           foodType: data.food_type,
+          user_id: data.user_id,
+          side: data.side,
+          amount: data.amount,
+          unit: data.unit,
+          notes: data.notes,
+          duration: data.duration
         };
         setCurrentSession(formattedSession);
         setShowTimer(true);
-        setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
       }
     } catch (error) {
-      console.error('Error starting breastfeeding session:', error);
+      console.error('Error in startBreastfeeding:', error);
     }
   };
 
@@ -235,24 +267,45 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!currentSession || !user?.id) return;
 
-      const endTime = new Date();
+      const endDate = new Date();
       const durationInMinutes = Math.floor(
-        (endTime.getTime() - currentSession.startTime.getTime()) / (1000 * 60)
+        (endDate.getTime() - currentSession.startTime.getTime()) / (1000 * 60)
       );
+
+      if (durationInMinutes < 1) {
+        const { error } = await supabase
+          .from('feeding_sessions')
+          .delete()
+          .eq('id', currentSession.id);
+
+        if (error) {
+          console.error('Error deleting short session:', error);
+          throw error;
+        }
+
+        setCurrentSession(null);
+        setShowTimer(false);
+        setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
 
       const { error } = await supabase
         .from('feeding_sessions')
         .update({
-          end_time: endTime.toISOString(),
+          end_time: endDate.toISOString(),
           duration: durationInMinutes,
+          updated_at: endDate.toISOString()
         })
         .eq('id', currentSession.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating breastfeeding session:', error);
+        throw error;
+      }
 
       const completedSession: FeedingSession = {
         ...currentSession,
-        end_time: endTime,
+        endTime: endDate,
         duration: durationInMinutes,
       };
 
@@ -261,7 +314,7 @@ export function FeedingProvider({ children }: { children: React.ReactNode }) {
       setShowTimer(false);
       setElapsedTime({ hours: 0, minutes: 0, seconds: 0 });
     } catch (error) {
-      console.error('Error stopping breastfeeding session:', error);
+      console.error('Error in stopBreastfeeding:', error);
     }
   };
 

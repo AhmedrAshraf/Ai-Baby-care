@@ -436,7 +436,7 @@ export default function FeedingScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Today's Feedings</Text>
           {getFilteredSessions().map((session, index) => (
-            console.log('session', session),
+            // console.log('session', session),
             <View key={index} style={styles.feedingItem}>
               <View style={styles.feedingTime}>
                 <Clock size={16} color="#6B7280" />

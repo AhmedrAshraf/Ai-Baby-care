@@ -222,6 +222,8 @@ CREATE INDEX IF NOT EXISTS sleep_records_user_id_start_time_idx ON sleep_records
 CREATE INDEX IF NOT EXISTS growth_measurements_user_id_date_idx ON growth_measurements(user_id, date DESC);
 CREATE INDEX IF NOT EXISTS conversations_interaction_type_idx ON conversations(interaction_type);
 CREATE INDEX IF NOT EXISTS conversations_user_id_created_at_idx ON conversations(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feeding_sessions_user_id ON feeding_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_feeding_sessions_start_time ON feeding_sessions(start_time);
 
 -- Enable RLS on all tables
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
