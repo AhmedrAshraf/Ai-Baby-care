@@ -29,7 +29,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 const menuItems = [
   { icon: Baby, label: 'Today', route: '/(tabs)', color: '#8B5CF6' },
   { icon: Moon, label: 'Sleep', route: '/sleep', color: '#EC4899' },
-  { icon: Syringe, label: 'Health', route: '/(tabs)/vaccinations', color: '#10B981' },
+  { icon: Syringe, label: 'Health', route: '/vaccinations', color: '#10B981' },
   { icon: MessageCircle, label: 'Ask AI', route: '/ask', color: '#6366F1' },
   { icon: Activity, label: 'Activity History', route: '/(tabs)/activity-history', color: '#F59E0B' },
 ];
