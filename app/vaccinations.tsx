@@ -152,6 +152,7 @@ export default function VaccinationsScreen() {
     <View style={styles.container}>
       <Header
         title="Health Records"
+        showBackButton
         useGradient
         bottomElement={
           <>
